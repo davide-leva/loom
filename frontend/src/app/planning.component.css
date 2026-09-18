@@ -1,0 +1,20 @@
+:host { display: block; }
+h1 { margin: 0; color: #0f477e; font-size: 24px; }
+.page-title { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 22px; }
+.page-title p { margin: 6px 0 0; color: #64748b; }
+.error-message { color: #b91c1c; font-weight: 700; }
+.planning-board { display: grid; grid-template-columns: repeat(4, minmax(250px, 1fr)); gap: 14px; align-items: start; overflow-x: auto; padding-bottom: 8px; }
+.planning-column { min-height: 440px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 18px; padding: 12px; }
+.planning-column header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; color: #0f477e; font-weight: 800; }
+.cards { display: flex; flex-direction: column; gap: 10px; min-height: 360px; }
+.planning-card-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 10px; box-shadow: 0 8px 18px rgba(15, 71, 126, .07); cursor: grab; }
+.planning-card-item:active { cursor: grabbing; }
+.planning-card-item.saving { opacity: .6; pointer-events: none; }
+.card-main { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #64748b; font-size: 12px; }
+.card-main strong { color: #0f477e; font-size: 14px; }
+h2 { margin: 8px 0 10px; color: #0f172a; font-size: 14px; line-height: 1.25; }
+.developer-select { display: flex; flex-direction: column; gap: 5px; color: #64748b; font-size: 12px; font-weight: 700; cursor: default; }
+.empty-column { border: 1px dashed #cbd5e1; border-radius: 14px; padding: 18px; text-align: center; color: #94a3b8; background: rgba(255,255,255,.7); }
+:host ::ng-deep .developer-select .p-select { width: 100%; }
+@media (max-width: 1200px) { .planning-board { grid-template-columns: repeat(4, 280px); } }
+@media (max-width: 680px) { .page-title { flex-direction: column; } }

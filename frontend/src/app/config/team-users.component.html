@@ -1,0 +1,85 @@
+<p-card>
+  <div class="section-heading">
+    <div>
+      <h2>Team Users</h2>
+      <p>Gestisci gli utenti interni dell’istanza con ruolo Team o Admin.</p>
+    </div>
+    <p-button label="Nuovo utente" icon="pi pi-user-plus" [disabled]="loading"
+              (onClick)="showNewUser()" />
+  </div>
+
+  @if (loadError) { <p class="form-error" role="alert">{{ loadError }}</p> }
+  <app-entity-table [rows]="users" [columns]="columns" [loading]="loading"
+                    emptyMessage="Nessun utente interno presente."
+                    actionLabel="Modifica" actionIcon="pi pi-pencil"
+                    secondaryActionLabel="Elimina"
+                    (refresh)="load()" (rowOpen)="editUser($event)"
+                    (secondaryRowAction)="confirmDeleteUser($event)" />
+
+  @if (formVisible) {
+    <form #userForm="ngForm" (ngSubmit)="saveUser()" class="user-form">
+      <h3>{{ editingUser ? 'Modifica utente interno' : 'Nuovo utente interno' }}</h3>
+      <div class="fields-grid">
+        <div class="form-field">
+          <label for="team-user-username">Username *</label>
+          <input pInputText id="team-user-username" name="username" [(ngModel)]="draft.username"
+                 maxlength="64" autocomplete="off" required />
+        </div>
+        <div class="form-field">
+          <label for="team-user-role">Ruolo *</label>
+          <p-select inputId="team-user-role" name="role" [options]="roleOptions"
+                    optionLabel="label" optionValue="value" [(ngModel)]="draft.role"
+                    appendTo="body" />
+        </div>
+        <div class="form-field">
+          <label for="team-user-first-name">Nome</label>
+          <input pInputText id="team-user-first-name" name="firstName" [(ngModel)]="draft.firstName"
+                 maxlength="32" />
+        </div>
+        <div class="form-field">
+          <label for="team-user-last-name">Cognome</label>
+          <input pInputText id="team-user-last-name" name="lastName" [(ngModel)]="draft.lastName"
+                 maxlength="32" />
+        </div>
+        <div class="form-field">
+          <label for="team-user-email">Email *</label>
+          <input pInputText id="team-user-email" name="email" type="email" [(ngModel)]="draft.email"
+                 maxlength="128" autocomplete="off" required email />
+        </div>
+        <div class="form-field">
+          <label for="team-user-password">
+            {{ editingUser ? 'Nuova password (lascia vuoto per mantenerla)' : 'Password * (almeno 12 caratteri)' }}
+          </label>
+          <p-password inputId="team-user-password" name="password" [(ngModel)]="draft.password"
+                      [feedback]="false" [toggleMask]="true" [style]="{ width: '100%' }"
+                      [inputStyle]="{ width: '100%' }" [required]="!editingUser" minlength="12" />
+        </div>
+      </div>
+
+      @if (saveError) { <p class="form-error" role="alert">{{ saveError }}</p> }
+      <div class="dialog-actions">
+        <p-button label="Annulla" severity="secondary" [outlined]="true" type="button"
+                  [disabled]="saving" (onClick)="formVisible = false" />
+        <p-button [label]="editingUser ? 'Salva modifiche' : 'Crea utente'" icon="pi pi-check"
+                  type="submit" [loading]="saving"
+                  [disabled]="userForm.invalid || !draft.username.trim() || !draft.email.trim() || (!editingUser && draft.password.length < 12) || (draft.password.length > 0 && draft.password.length < 12) || saving" />
+      </div>
+    </form>
+  }
+</p-card>
+
+<p-dialog header="Elimina utente interno" [(visible)]="deleteVisible" [modal]="true"
+          [style]="{ width: '440px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false"
+          [closable]="!deleting" [closeOnEscape]="!deleting">
+  @if (userToDelete) {
+    <p>Vuoi eliminare l’utente <strong>{{ userToDelete.username }}</strong>?</p>
+    <p>Le sue appartenenze ai progetti, i commenti e i riferimenti nelle issue saranno rimossi.</p>
+    @if (deleteError) { <p class="form-error" role="alert">{{ deleteError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" [disabled]="deleting"
+                (onClick)="deleteVisible = false" />
+      <p-button label="Elimina utente" icon="pi pi-trash" severity="danger" [loading]="deleting"
+                (onClick)="deleteUser()" />
+    </div>
+  }
+</p-dialog>

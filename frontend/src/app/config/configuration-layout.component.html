@@ -1,0 +1,21 @@
+<section class="configuration-page">
+  <h1>Configurazione</h1>
+  <p-card styleClass="configuration-toolbar">
+    <nav aria-label="Sezioni della configurazione">
+      <a routerLink="/configurazione/progetti" routerLinkActive="selected">
+        <i class="pi pi-folder" aria-hidden="true"></i><span>Progetti</span>
+      </a>
+      <a routerLink="/configurazione/compagnie" routerLinkActive="selected">
+        <i class="pi pi-building" aria-hidden="true"></i><span>Compagnie</span>
+      </a>
+      <a routerLink="/configurazione/team-users" routerLinkActive="selected">
+        <i class="pi pi-users" aria-hidden="true"></i><span>Team Users</span>
+      </a>
+      <a routerLink="/configurazione/campi-ticket" routerLinkActive="selected">
+        <i class="pi pi-sliders-h" aria-hidden="true"></i><span>Campi ticket</span>
+      </a>
+    </nav>
+  </p-card>
+
+  <router-outlet />
+</section>

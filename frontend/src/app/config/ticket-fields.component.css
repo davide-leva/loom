@@ -1,0 +1,55 @@
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+h2, h3 { margin: 0; color: #0f477e; }
+h2 { font-size: 22px; }
+h3 { font-size: 18px; }
+.section-heading p { margin: 6px 0 0; color: #64748b; font-size: 14px; }
+.project-picker, .details-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+:host ::ng-deep .project-picker .p-select { width: min(100%, 320px); }
+.field-form, .option-form { margin-top: 24px; padding: 20px; border: 1px solid #d1e4f6; border-radius: 10px; background: #f8fbff; }
+.fields-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.option-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 16px; align-items: end; margin-top: 16px; }
+.form-field { display: flex; flex-direction: column; gap: 6px; }
+.form-field label { color: #374151; font-size: 13px; font-weight: 500; }
+.form-field input { width: 100%; }
+.form-field small { color: #64748b; }
+:host ::ng-deep .form-field .p-select { width: 100%; }
+.flags-field { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-top: 24px; }
+.check-row { display: inline-flex; align-items: center; gap: 8px; color: #374151; font-size: 14px; font-weight: 500; }
+.check-row input { width: 16px; height: 16px; accent-color: #0f477e; }
+.option-active { padding-bottom: 10px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.form-error { color: #b42318; font-size: 14px; }
+:host ::ng-deep .details-card { margin-top: 18px; }
+.empty-details { color: #64748b; margin: 0; }
+.action-column { width: 220px; text-align: right; }
+.row-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.preview-form { display: flex; flex-direction: column; gap: 22px; }
+.preview-section { padding: 16px; border: 1px solid #dbe7f3; border-radius: 8px; background: #fbfdff; }
+.preview-section h3 { margin-bottom: 14px; }
+.preview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.preview-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.preview-field label { color: #374151; font-size: 13px; font-weight: 600; }
+.preview-field input, .preview-field textarea { width: 100%; }
+.preview-field textarea {
+  resize: vertical;
+  min-height: 86px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #64748b;
+  background: #f8fafc;
+  font: inherit;
+}
+.preview-field small { color: #64748b; }
+.span-2 { grid-column: 1 / -1; }
+.preview-check { min-height: 40px; }
+:host ::ng-deep .preview-field .p-select { width: 100%; }
+:host ::ng-deep .options-table .p-datatable-thead > tr > th { background: var(--p-primary-500); color: #fff; }
+:host ::ng-deep .options-table .p-datatable-tbody > tr:hover { background: #eef5fc; }
+@media (max-width: 720px) {
+  .project-picker, .details-actions { width: 100%; justify-content: stretch; }
+  :host ::ng-deep .project-picker .p-select { width: 100%; }
+  .fields-grid, .option-grid, .preview-grid { grid-template-columns: 1fr; }
+  .option-active { padding-bottom: 0; }
+  .field-form, .option-form { padding: 14px; }
+}

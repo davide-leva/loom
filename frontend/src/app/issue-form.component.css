@@ -1,0 +1,29 @@
+.issue-form-preview { display: flex; flex-direction: column; gap: 22px; }
+.issue-form-section { padding: 16px; border: 1px solid #dbe7f3; border-radius: 8px; background: #fbfdff; }
+.issue-form-section h3 { margin: 0 0 14px; color: #0f477e; font-size: 18px; }
+.issue-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.issue-form-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.issue-form-field label { color: #374151; font-size: 13px; font-weight: 600; }
+.issue-form-field input, .issue-form-field textarea { width: 100%; }
+.issue-form-field textarea {
+  resize: vertical;
+  min-height: 86px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #64748b;
+  background: #f8fafc;
+  font: inherit;
+}
+.issue-form-field textarea:focus {
+  outline: 0;
+  border-color: #145ea8;
+  box-shadow: 0 0 0 2px rgba(20, 94, 168, .12);
+}
+.issue-form-field small { color: #64748b; }
+.span-2 { grid-column: 1 / -1; }
+.empty-details { color: #64748b; margin: 0; }
+:host ::ng-deep .issue-form-field .p-select { width: 100%; }
+@media (max-width: 720px) {
+  .issue-form-grid { grid-template-columns: 1fr; }
+}

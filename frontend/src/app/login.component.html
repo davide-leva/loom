@@ -1,0 +1,38 @@
+<main class="login-page">
+  <div class="login-content">
+    <div class="brand">
+      <img src="/Logo_SoftwareDue.svg" alt="Software Due" />
+      <span>Tickets Platform</span>
+    </div>
+
+    <p-card styleClass="login-card">
+      <ng-template #header>
+        <div class="card-heading">
+          <h1>Benvenuto</h1>
+          <h2>Accedi</h2>
+        </div>
+      </ng-template>
+
+      <form (ngSubmit)="login()">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input pInputText id="username" name="username" type="text" [(ngModel)]="username"
+                 autocomplete="username" required autofocus />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <p-password inputId="password" name="password" [(ngModel)]="password"
+                      [feedback]="false" [toggleMask]="true" [style]="{ width: '100%' }"
+                      [inputStyle]="{ width: '100%' }" />
+        </div>
+        @if (error) {
+          <p class="error" role="alert">{{ error }}</p>
+        }
+        <div class="actions">
+          <p-button type="submit" label="Accedi" [loading]="loading"
+                    [disabled]="!username.trim() || !password || loading" />
+        </div>
+      </form>
+    </p-card>
+  </div>
+</main>

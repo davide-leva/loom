@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tickets}
+    username: ${DB_USER:dbatickets}
+    password: ${DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  servlet:
+    multipart:
+      max-file-size: ${ATTACHMENTS_MAX_FILE_SIZE:25MB}
+      max-request-size: ${ATTACHMENTS_MAX_REQUEST_SIZE:${ATTACHMENTS_MAX_FILE_SIZE:25MB}}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:25}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH:false}
+          starttls:
+            enable: ${SMTP_STARTTLS_ENABLE:false}
+
+app:
+  jwt:
+    issuer: sf2-tickets
+    ttl-minutes: 15
+    secret: ${JWT_SECRET}
+  attachments:
+    root-folder: ${ATTACHMENTS_ROOT_FOLDER:./attachments}
+    max-file-size: ${ATTACHMENTS_MAX_FILE_SIZE:25MB}
+
+  notifications:
+    email:
+      enabled: ${MAIL_NOTIFICATIONS_ENABLED:false}
+      from: ${MAIL_FROM:no-reply@softwaredue.local}
+      logo-path: ${MAIL_LOGO_PATH:../frontend/public/Logo_SoftwareDue.svg}
+      scheduler-delay: ${MAIL_NOTIFICATIONS_DELAY:5m}

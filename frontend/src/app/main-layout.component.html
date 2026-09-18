@@ -1,0 +1,39 @@
+<div class="app-shell">
+  <header class="app-header">
+    <a class="brand" routerLink="/dashboard" aria-label="Software Due, Dashboard">
+      <img src="/Logo_SoftwareDue.svg" alt="Software Due" />
+      <span>Tickets</span>
+    </a>
+
+    <nav class="main-nav" aria-label="Navigazione principale">
+      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
+      <a routerLink="/anomalie" routerLinkActive="active">Anomalie</a>
+      <a routerLink="/migliorie" routerLinkActive="active">Migliorie</a>
+      <a routerLink="/implementazioni" routerLinkActive="active">Implementazioni</a>
+      @if (auth.user()?.role === 'ADMIN') {
+        <a routerLink="/pianificazione" routerLinkActive="active">Pianificazione</a>
+        <a routerLink="/configurazione" routerLinkActive="active">Configurazione</a>
+      }
+    </nav>
+
+    <div class="header-actions">
+      <label class="project-picker">
+        <span>Progetto</span>
+        <p-select inputId="current-project" [options]="projectContext.projects()"
+                  optionLabel="name" optionValue="id" [ngModel]="projectContext.currentProjectId()"
+                  (ngModelChange)="projectContext.select($event)" [disabled]="projectContext.projects().length === 0"
+                  [placeholder]="projectContext.loadError() ? 'Non disponibile' : 'Nessun progetto'"
+                  appendTo="body" />
+      </label>
+
+      <p-menu #userMenu [model]="userMenuItems()" [popup]="true" appendTo="body" />
+      <p-button [label]="auth.user()?.username ?? 'Utente'" icon="pi pi-user" iconPos="left"
+                severity="secondary" [outlined]="true" (onClick)="userMenu.toggle($event)"
+                ariaLabel="Menu utente" />
+    </div>
+  </header>
+
+  <main class="page-content">
+    <router-outlet />
+  </main>
+</div>

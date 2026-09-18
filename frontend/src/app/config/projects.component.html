@@ -1,0 +1,141 @@
+<p-card>
+  <div class="section-heading">
+    <div>
+      <h2>Progetti</h2>
+      <p>Gestisci i progetti dell’istanza e la compagnia eventualmente collegata.</p>
+    </div>
+    <p-button label="Nuovo progetto" icon="pi pi-plus" [disabled]="loading"
+              (onClick)="openCreate()" />
+  </div>
+
+  @if (loadError) { <p class="form-error" role="alert">{{ loadError }}</p> }
+  <app-entity-table [rows]="rows" [columns]="columns" [loading]="loading"
+                    emptyMessage="Nessun progetto presente." actionLabel="Modifica"
+                    actionIcon="pi pi-pencil" secondaryActionLabel="Elimina"
+                    (refresh)="load()" (rowOpen)="openEdit($event)"
+                    (secondaryRowAction)="confirmDelete($event)" />
+</p-card>
+
+<p-dialog [header]="editingProject ? 'Modifica progetto' : 'Nuovo progetto'"
+          [(visible)]="formVisible" [modal]="true"
+          [style]="{ width: editingProject ? '800px' : '460px', maxWidth: '95vw' }"
+          [draggable]="false" [resizable]="false"
+          [closable]="!saving"
+          [closeOnEscape]="!saving" (onHide)="closeForm()">
+  <form #projectForm="ngForm" (ngSubmit)="save()" class="project-form">
+    <div class="form-field">
+      <label for="project-name">Nome progetto *</label>
+      <input pInputText id="project-name" name="name" [(ngModel)]="draft.name"
+             maxlength="32" required autofocus />
+    </div>
+    <div class="form-field">
+      <label for="project-company">Compagnia</label>
+      <p-select inputId="project-company" name="companyId" [options]="companies"
+                optionLabel="name" optionValue="id" [(ngModel)]="draft.companyId"
+                placeholder="Nessuna compagnia" [showClear]="true" [filter]="true"
+                filterBy="name" appendTo="body" />
+      <small>Il progetto può esistere anche senza una compagnia collegata.</small>
+    </div>
+    @if (saveError) { <p class="form-error" role="alert">{{ saveError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" type="button"
+                [disabled]="saving" (onClick)="formVisible = false" />
+      <p-button [label]="editingProject ? 'Salva modifiche' : 'Crea progetto'" icon="pi pi-check"
+                type="submit" [loading]="saving"
+                [disabled]="projectForm.invalid || !draft.name.trim() || saving" />
+    </div>
+  </form>
+
+  @if (editingProject) {
+    <section class="members-section">
+      <h3>Utenti del progetto</h3>
+      <p>Gli utenti della compagnia collegata sono inclusi automaticamente. Puoi aggiungere utenti esterni con assegnazione esplicita.</p>
+
+      <div class="assign-user-row">
+        <p-select inputId="external-user" [options]="externalUserOptions" optionLabel="label"
+                  optionValue="value" [(ngModel)]="selectedExternalUserId"
+                  placeholder="Seleziona utente esterno" [filter]="true" filterBy="label"
+                  appendTo="body" [disabled]="membersLoading || assigning || externalUserOptions.length === 0" />
+        <p-button label="Assegna" icon="pi pi-user-plus" [loading]="assigning"
+                  [disabled]="selectedExternalUserId === null || assigning"
+                  (onClick)="assignExternalUser()" />
+      </div>
+
+      @if (membersError) { <p class="form-error" role="alert">{{ membersError }}</p> }
+      @if (assignError) { <p class="form-error" role="alert">{{ assignError }}</p> }
+
+      <p-table [value]="memberGroups" dataKey="id" [loading]="membersLoading"
+               [expandedRowKeys]="expandedMemberGroups" styleClass="p-datatable-sm member-table"
+               [tableStyle]="{ 'min-width': '44rem' }">
+        <ng-template #header>
+          <tr>
+            <th class="expander-column"></th>
+            <th>Gruppo</th>
+            <th>Origine</th>
+            <th class="count-column">Utenti</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-group let-expanded="expanded">
+          <tr>
+            <td class="expander-column">
+              <p-button type="button" [pRowToggler]="group" [text]="true" [rounded]="true"
+                        [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+                        [disabled]="group.users.length === 0" />
+            </td>
+            <td><strong>{{ group.label }}</strong></td>
+            <td>{{ group.description }}</td>
+            <td class="count-column">{{ group.users.length }}</td>
+          </tr>
+        </ng-template>
+        <ng-template #expandedrow let-group>
+          @for (user of group.users; track user.id) {
+            <tr class="member-subrow">
+              <td></td>
+              <td>
+                <span class="member-name">{{ user.username }}</span>
+                <span class="member-role">{{ user.role }}</span>
+              </td>
+              <td>{{ user.email }}</td>
+              <td class="count-column">
+                @if (isAutomaticMember(user)) {
+                  <span class="membership-lock">Auto</span>
+                } @else {
+                  <p-button icon="pi pi-trash" severity="danger" [outlined]="true" size="small"
+                            ariaLabel="Rimuovi utente dal progetto"
+                            [loading]="removingUserId === user.id"
+                            [disabled]="removingUserId !== null"
+                            (onClick)="removeExplicitUser(user)" />
+                }
+              </td>
+            </tr>
+          }
+          @if (group.users.length === 0) {
+            <tr class="member-subrow">
+              <td></td>
+              <td colspan="3">Nessun utente in questo gruppo.</td>
+            </tr>
+          }
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr><td colspan="4">Nessun utente nel progetto.</td></tr>
+        </ng-template>
+      </p-table>
+    </section>
+  }
+</p-dialog>
+
+<p-dialog header="Elimina progetto" [(visible)]="deleteVisible" [modal]="true"
+          [style]="{ width: '480px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false"
+          [closable]="!deleting" [closeOnEscape]="!deleting">
+  @if (projectToDelete) {
+    <p>Vuoi eliminare il progetto <strong>{{ projectToDelete.name }}</strong>?</p>
+    <p>Verranno eliminate anche tutte le issue e i dati collegati al progetto.</p>
+    @if (deleteError) { <p class="form-error" role="alert">{{ deleteError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" [disabled]="deleting"
+                (onClick)="deleteVisible = false" />
+      <p-button label="Elimina progetto" icon="pi pi-trash" severity="danger" [loading]="deleting"
+                (onClick)="delete()" />
+    </div>
+  }
+</p-dialog>

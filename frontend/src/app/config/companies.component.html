@@ -1,0 +1,122 @@
+<p-card>
+  <div class="section-heading">
+    <div>
+      <h2>Compagnie</h2>
+      <p>Gestisci le compagnie e gli utenti che ne fanno parte.</p>
+    </div>
+    <p-button label="Nuova compagnia" icon="pi pi-plus" [disabled]="companiesLoading"
+              (onClick)="openCreateCompany()" />
+  </div>
+
+  @if (companiesError) { <p class="form-error" role="alert">{{ companiesError }}</p> }
+  <app-entity-table [rows]="companies" [columns]="companyColumns" [loading]="companiesLoading"
+                    emptyMessage="Nessuna compagnia presente." actionLabel="Apri"
+                    (refresh)="loadCompanies()" (rowOpen)="openCompany($event)" />
+</p-card>
+
+<p-dialog header="Nuova compagnia" [(visible)]="createCompanyVisible" [modal]="true"
+          [style]="{ width: '420px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false">
+  <form #companyForm="ngForm" (ngSubmit)="createCompany()" class="dialog-form">
+    <label for="company-name">Nome compagnia</label>
+    <input pInputText id="company-name" name="name" [(ngModel)]="newCompanyName"
+           maxlength="64" required autofocus />
+    @if (companySaveError) { <p class="form-error" role="alert">{{ companySaveError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" type="button"
+                (onClick)="createCompanyVisible = false" />
+      <p-button label="Crea" icon="pi pi-check" type="submit" [loading]="savingCompany"
+                [disabled]="companyForm.invalid || !newCompanyName.trim() || savingCompany" />
+    </div>
+  </form>
+</p-dialog>
+
+<p-dialog [header]="'Compagnia: ' + (selectedCompany?.name ?? '')" [(visible)]="companyDialogVisible"
+          [modal]="true" [style]="{ width: '960px', maxWidth: '96vw' }"
+          [breakpoints]="{ '640px': '96vw' }" [draggable]="false" [resizable]="false"
+          [closable]="!savingUser && !deletingUser" [closeOnEscape]="!savingUser && !deletingUser"
+          (onHide)="closeCompany()">
+  @if (selectedCompany) {
+    <div class="users-heading">
+      <div>
+        <h3>Utenti della compagnia</h3>
+        <p>Puoi aggiungere utenti con ruolo User o Superuser.</p>
+      </div>
+      @if (!userFormVisible) {
+        <p-button label="Nuovo utente" icon="pi pi-user-plus" (onClick)="showNewUser()" />
+      }
+    </div>
+
+    @if (usersError) { <p class="form-error" role="alert">{{ usersError }}</p> }
+    <app-entity-table [rows]="companyUsers" [columns]="userColumns" [loading]="usersLoading"
+                      emptyMessage="Nessun utente per questa compagnia."
+                      actionLabel="Modifica" actionIcon="pi pi-pencil" secondaryActionLabel="Elimina"
+                      (refresh)="loadUsers()" (rowOpen)="editUser($event)"
+                      (secondaryRowAction)="confirmDeleteUser($event)" />
+
+    @if (userFormVisible) {
+      <form #userForm="ngForm" (ngSubmit)="saveUser()" class="user-form">
+        <h3>{{ editingUser ? 'Modifica utente' : 'Nuovo utente' }}</h3>
+        <div class="fields-grid">
+          <div class="form-field">
+            <label for="new-user-username">Username *</label>
+            <input pInputText id="new-user-username" name="username" [(ngModel)]="newUser.username"
+                   maxlength="64" autocomplete="off" required />
+          </div>
+          <div class="form-field">
+            <label for="new-user-role">Ruolo *</label>
+            <p-select inputId="new-user-role" name="role" [options]="roleOptions"
+                      optionLabel="label" optionValue="value" [(ngModel)]="newUser.role"
+                      appendTo="body" />
+          </div>
+          <div class="form-field">
+            <label for="new-user-first-name">Nome</label>
+            <input pInputText id="new-user-first-name" name="firstName" [(ngModel)]="newUser.firstName"
+                   maxlength="32" />
+          </div>
+          <div class="form-field">
+            <label for="new-user-last-name">Cognome</label>
+            <input pInputText id="new-user-last-name" name="lastName" [(ngModel)]="newUser.lastName"
+                   maxlength="32" />
+          </div>
+          <div class="form-field">
+            <label for="new-user-email">Email *</label>
+            <input pInputText id="new-user-email" name="email" type="email" [(ngModel)]="newUser.email"
+                   maxlength="128" autocomplete="off" required email />
+          </div>
+          <div class="form-field">
+            <label for="new-user-password">
+              {{ editingUser ? 'Nuova password (lascia vuoto per mantenerla)' : 'Password * (almeno 12 caratteri)' }}
+            </label>
+            <p-password inputId="new-user-password" name="password" [(ngModel)]="newUser.password"
+                        [feedback]="false" [toggleMask]="true" [style]="{ width: '100%' }"
+                        [inputStyle]="{ width: '100%' }" [required]="!editingUser" minlength="12" />
+          </div>
+        </div>
+        @if (userSaveError) { <p class="form-error" role="alert">{{ userSaveError }}</p> }
+        <div class="dialog-actions">
+          <p-button label="Annulla" severity="secondary" [outlined]="true" type="button"
+                    [disabled]="savingUser" (onClick)="userFormVisible = false" />
+          <p-button [label]="editingUser ? 'Salva modifiche' : 'Crea utente'" icon="pi pi-check"
+                    type="submit" [loading]="savingUser"
+                    [disabled]="userForm.invalid || !newUser.username.trim() || !newUser.email.trim() || (!editingUser && newUser.password.length < 12) || (newUser.password.length > 0 && newUser.password.length < 12) || savingUser" />
+        </div>
+      </form>
+    }
+  }
+</p-dialog>
+
+<p-dialog header="Elimina utente" [(visible)]="deleteUserVisible" [modal]="true" appendTo="body"
+          [style]="{ width: '440px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false"
+          [closable]="!deletingUser" [closeOnEscape]="!deletingUser">
+  @if (userToDelete) {
+    <p>Vuoi eliminare l’utente <strong>{{ userToDelete.username }}</strong>?</p>
+    <p>Le sue appartenenze ai progetti e i riferimenti nelle issue e nei commenti saranno rimossi.</p>
+    @if (deleteUserError) { <p class="form-error" role="alert">{{ deleteUserError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" [disabled]="deletingUser"
+                (onClick)="deleteUserVisible = false" />
+      <p-button label="Elimina utente" icon="pi pi-trash" severity="danger" [loading]="deletingUser"
+                (onClick)="deleteUser()" />
+    </div>
+  }
+</p-dialog>

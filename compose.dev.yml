@@ -1,0 +1,67 @@
+services:
+  database:
+    image: postgres:16-alpine
+    container_name: tickets-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-dbatickets}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-tickets}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: tickets-backend
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://database:5432/${DB_NAME:-tickets}
+      DB_USER: ${DB_USER:-dbatickets}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ATTACHMENTS_ROOT_FOLDER: /data/attachments
+      ATTACHMENTS_MAX_FILE_SIZE: ${ATTACHMENTS_MAX_FILE_SIZE:-25MB}
+      ATTACHMENTS_MAX_REQUEST_SIZE: ${ATTACHMENTS_MAX_REQUEST_SIZE:-25MB}
+      MAIL_NOTIFICATIONS_ENABLED: ${MAIL_NOTIFICATIONS_ENABLED:-false}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@softwaredue.local}
+      MAIL_LOGO_PATH: /app/assets/Logo_SoftwareDue.svg
+      MAIL_NOTIFICATIONS_DELAY: ${MAIL_NOTIFICATIONS_DELAY:-5m}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLE:-false}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - attachments_data:/data/attachments
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tickets-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NGINX_CLIENT_MAX_BODY_SIZE: ${ATTACHMENTS_MAX_REQUEST_SIZE:-25MB}
+    ports:
+      - "${FRONTEND_PORT:-4200}:80"
+
+volumes:
+  postgres_data:
+  attachments_data:

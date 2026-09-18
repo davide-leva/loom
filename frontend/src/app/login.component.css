@@ -1,0 +1,41 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background: #f8f8f8;
+}
+
+.login-content { width: min(100%, 600px); }
+
+.brand { position: relative; margin: 0 auto 48px; text-align: center; }
+.brand img { display: block; width: 50%; margin: auto; height: auto; }
+.brand span {
+  display: inline-block;
+  margin-top: 8px;
+  color: #145ea8;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+:host ::ng-deep .login-card { display: block; width: min(100%, 380px); margin: auto; }
+:host ::ng-deep .login-card .p-card-body { padding: 24px; }
+
+.card-heading { padding-top: 20px; text-align: center; }
+.card-heading h1 { margin: 7px 0 10px; color: #333; font-size: 24px; font-weight: 600; }
+.card-heading h2 { margin: 0 0 16px; color: #333; font-size: 20px; font-weight: 600; }
+
+.form-group { display: flex; flex-direction: column; margin-bottom: 20px; }
+.form-group label { margin-bottom: 6px; font-size: 13px; }
+.form-group input { width: 100%; }
+
+.actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.error { color: #b42318; font-size: 13px; line-height: 1.4; margin: 0 0 16px; }
+
+@media (max-width: 480px) {
+  .brand { margin-bottom: 28px; }
+  :host ::ng-deep .login-card { width: 100%; }
+}

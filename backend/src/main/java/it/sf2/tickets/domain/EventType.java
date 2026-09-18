@@ -1,0 +1,11 @@
+package it.sf2.tickets.domain;
+
+public enum EventType {
+    ISSUE_CREATED,
+    ISSUE_PLANNED,
+    ISSUE_STATUS_CHANGED,
+    ISSUE_APPROVED,
+    ISSUE_COMMENT_ADDED,
+    ISSUE_ATTACHMENT_UPLOADED,
+    ISSUE_DELETED
+}

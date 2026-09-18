@@ -1,0 +1,2 @@
+ALTER TABLE issues
+    ALTER COLUMN issue_type DROP NOT NULL;
