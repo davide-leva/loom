@@ -54,7 +54,7 @@ type TriState = boolean | null;
     </p-card>
   `,
   styles: [`
-    h1 { margin: 0; color: #0f477e; font-size: 24px; }
+    h1 { margin: 0; color: var(--p-primary-700); font-size: 24px; }
     .page-title { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 22px; }
     .page-title p { margin: 6px 0 0; color: #64748b; }
     .preference-section { margin-bottom: 20px; max-width: 420px; }

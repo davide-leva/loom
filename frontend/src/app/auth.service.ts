@@ -1,6 +1,7 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Observable, catchError, map, of, switchMap, tap, throwError } from 'rxjs';
+import { applyBrandColor } from './brand-colors';
 
 interface LoginResponse {
   accessToken: string;
@@ -8,17 +9,29 @@ interface LoginResponse {
   expiresInSeconds: number;
 }
 
+interface ExternalLoginResponse {
+  session: LoginResponse;
+  projectId: number;
+}
+
 export interface CurrentUser {
   id: number;
   username: string;
+  displayName: string;
   email: string;
   role: string;
   companyName: string | null;
+  companyId: number | null;
+  primaryColor: string;
+  companyLogoUrl: string | null;
+  internalCompanyName: string | null;
+  internalLogoUrl: string | null;
 }
 
 export interface ProjectSummary {
   id: number;
   name: string;
+  logoUrl: string | null;
 }
 
 const TOKEN_KEY = 'sf2-tickets-access-token';
@@ -39,6 +52,17 @@ export class AuthService {
     );
   }
 
+  loginExternal(token: string): Observable<number> {
+    return this.http.post<ExternalLoginResponse>('/api/auth/external-login', { token }).pipe(
+      tap(response => sessionStorage.setItem(TOKEN_KEY, response.session.accessToken)),
+      switchMap(response => this.me().pipe(map(() => response.projectId))),
+      catchError(error => {
+        this.logout();
+        return throwError(() => error);
+      })
+    );
+  }
+
   me(): Observable<CurrentUser> {
     const token = sessionStorage.getItem(TOKEN_KEY);
     if (!token) {
@@ -46,7 +70,10 @@ export class AuthService {
     }
     return this.http.get<CurrentUser>('/api/auth/me', {
       headers: this.headers(token)
-    }).pipe(tap(user => this.user.set(user)));
+    }).pipe(tap(user => {
+      this.user.set(user);
+      applyBrandColor(user.primaryColor);
+    }));
   }
 
   projects(): Observable<ProjectSummary[]> {
@@ -67,9 +94,6 @@ export class AuthService {
   }
 
   hasValidSession(): Observable<boolean> {
-    if (this.user()) {
-      return of(true);
-    }
     return this.me().pipe(
       map(() => true),
       catchError((error: unknown) => {
@@ -85,5 +109,6 @@ export class AuthService {
   logout(): void {
     sessionStorage.removeItem(TOKEN_KEY);
     this.user.set(null);
+    applyBrandColor('blue');
   }
 }

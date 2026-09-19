@@ -1,0 +1,27 @@
+:host ::ng-deep .p-card-body { padding: 22px; }
+.project-option-logo { display: block; max-width: 125px; height: 27px; object-fit: contain; }
+h2, h3 { margin: 0; color: var(--p-primary-700); }
+h2 { font-size: 21px; }
+h3 { font-size: 17px; }
+p { margin: 6px 0 0; color: #64748b; }
+.heading, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.heading { flex-wrap: wrap; }
+.heading p-select { min-width: 220px; }
+.heading-actions { gap: 8px; display: flex; }
+.section-heading { margin: 24px 0 12px; flex-wrap: wrap; }
+.switch-row { display: flex; align-items: center; gap: 10px; margin-top: 24px; font-weight: 600; }
+.switch-row input { width: 18px; height: 18px; accent-color: var(--p-primary-600); }
+.help { margin: 12px 0 22px; line-height: 1.5; }
+.application-form { display: grid; gap: 14px; padding-top: 6px; }
+.application-form label, .add-mapping label { display: grid; gap: 5px; font-size: 13px; font-weight: 600; }
+.application-form input, .application-form p-select, .add-mapping input, .add-mapping p-select { width: 100%; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.mappings { border-top: 1px solid #e5e7eb; margin-top: 22px; padding-top: 20px; }
+.mapping-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #eef2f7; padding: 8px 0; }
+.mapping-row code { overflow-wrap: anywhere; }
+.add-mapping { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.add-mapping label { flex: 1 1 190px; }
+.muted { font-size: 13px; line-height: 1.5; }
+.error { margin: 12px 0; color: #b42318; }
+@media (max-width: 560px) { .form-grid { grid-template-columns: 1fr; } }

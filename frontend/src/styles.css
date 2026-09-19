@@ -13,3 +13,82 @@
 body { min-width: 320px; min-height: 100vh; margin: 0; }
 
 button, input { font: inherit; }
+
+.app-file-upload.p-fileupload {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.app-file-upload .p-fileupload-header {
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.app-file-upload .p-fileupload-content {
+  min-height: 0;
+  padding: 8px 0 0;
+  border: 0;
+  background: transparent;
+}
+
+.app-file-upload .p-fileupload-content:empty,
+.app-file-upload .p-fileupload-cancel-button:disabled,
+.app-file-upload .p-progressbar,
+.app-file-upload .p-fileupload-file-thumbnail {
+  display: none;
+}
+
+.app-file-upload .p-fileupload-file-list {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 8px;
+}
+
+.app-file-upload .p-fileupload-file {
+  display: inline-flex;
+  width: auto;
+  max-width: min(100%, 360px);
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  gap: 7px;
+  padding: 5px 6px 5px 11px;
+  border: 1px solid var(--p-primary-200);
+  border-radius: 999px;
+  background: var(--p-primary-50);
+}
+
+.app-file-upload .p-fileupload-file-info {
+  min-width: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-file-upload .p-fileupload-file-name {
+  overflow: hidden;
+  color: var(--p-primary-800);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-file-upload .p-fileupload-file-size {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.app-file-upload .p-fileupload-file-actions {
+  margin-left: 0;
+}
+
+.app-file-upload .p-fileupload-file-remove-button.p-button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}

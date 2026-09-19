@@ -4,10 +4,13 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
+import { FileSelectEvent, FileUploadModule } from 'primeng/fileupload';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { SelectModule } from 'primeng/select';
 import { finalize } from 'rxjs';
+import { AuthService } from '../auth.service';
+import { BRAND_COLORS } from '../brand-colors';
 import { ProjectContextService } from '../project-context.service';
 import { AdminConfigService, Company, CompanyRole, CompanyUser, CompanyUserInput } from './admin-config.service';
 import { EntityColumn, EntityTableComponent } from './entity-table.component';
@@ -16,7 +19,7 @@ type UserDraft = Omit<CompanyUserInput, 'companyId' | 'password'> & { password: 
 
 @Component({
   selector: 'app-companies',
-  imports: [FormsModule, ButtonModule, CardModule, DialogModule, InputTextModule,
+  imports: [FormsModule, ButtonModule, CardModule, DialogModule, FileUploadModule, InputTextModule,
     PasswordModule, SelectModule, EntityTableComponent],
   templateUrl: './companies.component.html',
   styleUrl: './companies.component.css'
@@ -24,6 +27,8 @@ type UserDraft = Omit<CompanyUserInput, 'companyId' | 'password'> & { password: 
 export class CompaniesComponent implements OnInit {
   private readonly api = inject(AdminConfigService);
   private readonly projectContext = inject(ProjectContextService);
+  private readonly auth = inject(AuthService);
+  readonly colors = [...BRAND_COLORS];
 
   readonly companyColumns: EntityColumn[] = [
     { field: 'id', label: 'ID' },
@@ -47,6 +52,13 @@ export class CompaniesComponent implements OnInit {
   companiesError = '';
   createCompanyVisible = false;
   newCompanyName = '';
+  newCompanyColor = 'blue';
+  newCompanyLogo: File | null = null;
+  companyName = '';
+  companyColor = 'blue';
+  companyLogo: File | null = null;
+  savingCompanyDetails = false;
+  companyDetailsError = '';
   companySaveError = '';
   savingCompany = false;
 
@@ -80,6 +92,8 @@ export class CompaniesComponent implements OnInit {
 
   openCreateCompany(): void {
     this.newCompanyName = '';
+    this.newCompanyColor = 'blue';
+    this.newCompanyLogo = null;
     this.companySaveError = '';
     this.createCompanyVisible = true;
   }
@@ -90,7 +104,8 @@ export class CompaniesComponent implements OnInit {
 
     this.savingCompany = true;
     this.companySaveError = '';
-    this.api.createCompany(name).pipe(finalize(() => this.savingCompany = false)).subscribe({
+    this.api.createCompany(name, this.newCompanyColor, this.newCompanyLogo)
+      .pipe(finalize(() => this.savingCompany = false)).subscribe({
       next: company => {
         this.companies = this.sortCompanies([...this.companies, company]).map(item => ({ ...item, kindLabel: item.teamCompany ? 'Team interno' : 'Cliente' }) as Company);
         this.createCompanyVisible = false;
@@ -102,12 +117,60 @@ export class CompaniesComponent implements OnInit {
 
   openCompany(company: Company): void {
     this.selectedCompany = company;
+    this.companyName = company.name;
+    this.companyColor = company.primaryColor;
+    this.companyLogo = null;
+    this.companyDetailsError = '';
     this.companyUsers = [];
     this.userFormVisible = false;
     this.editingUser = null;
     this.userSaveError = '';
     this.companyDialogVisible = true;
     this.loadUsers();
+  }
+
+  selectLogo(event: FileSelectEvent, creating: boolean): void {
+    const file = event.currentFiles[event.currentFiles.length - 1] ?? null;
+    if (creating) this.newCompanyLogo = file;
+    else this.companyLogo = file;
+  }
+
+  clearLogo(creating: boolean): void {
+    if (creating) this.newCompanyLogo = null;
+    else this.companyLogo = null;
+  }
+
+  saveCompanyDetails(): void {
+    const company = this.selectedCompany;
+    if (!company || !this.companyName.trim() || this.savingCompanyDetails) return;
+    this.savingCompanyDetails = true;
+    this.companyDetailsError = '';
+    this.api.updateCompany(company.id, this.companyName.trim(), this.companyColor, this.companyLogo)
+      .pipe(finalize(() => this.savingCompanyDetails = false)).subscribe({
+        next: updated => {
+          this.selectedCompany = updated;
+          this.companies = this.sortCompanies(this.companies.map(item => item.id === updated.id ? updated : item))
+            .map(item => ({ ...item, kindLabel: item.teamCompany ? 'Team interno' : 'Cliente' }) as Company);
+          this.companyLogo = null;
+          this.auth.me().subscribe();
+        },
+        error: () => this.companyDetailsError = 'Impossibile salvare la compagnia. Verifica il logo e riprova.'
+      });
+  }
+
+  removeCompanyLogo(): void {
+    const company = this.selectedCompany;
+    if (!company?.logoUrl || this.savingCompanyDetails) return;
+    this.savingCompanyDetails = true;
+    this.api.deleteCompanyLogo(company.id).pipe(finalize(() => this.savingCompanyDetails = false)).subscribe({
+      next: () => {
+        const updated = { ...company, logoUrl: null };
+        this.selectedCompany = updated;
+        this.companies = this.companies.map(item => item.id === company.id ? updated : item);
+        this.auth.me().subscribe();
+      },
+      error: () => this.companyDetailsError = 'Impossibile rimuovere il logo.'
+    });
   }
 
   closeCompany(): void {
@@ -170,8 +233,8 @@ export class CompaniesComponent implements OnInit {
       lastName: this.newUser.lastName?.trim() || null,
       password: editing && !password ? null : password
     };
-    if (!input.username || !input.email || (!editing && password.length < 12)
-        || (password.length > 0 && password.length < 12)) return;
+    if (!input.username || !input.email || (!editing && password.length < 8)
+        || (password.length > 0 && password.length < 8)) return;
 
     this.savingUser = true;
     this.userSaveError = '';

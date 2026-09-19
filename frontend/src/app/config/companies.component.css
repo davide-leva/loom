@@ -1,5 +1,5 @@
 .section-heading, .users-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-h2, h3 { margin: 0; color: #0f477e; }
+h2, h3 { margin: 0; color: var(--p-primary-700); }
 h2 { font-size: 22px; }
 h3 { font-size: 18px; }
 .section-heading p, .users-heading p { margin: 6px 0 0; color: #64748b; font-size: 14px; }
@@ -9,9 +9,12 @@ h3 { font-size: 18px; }
 .dialog-form { gap: 12px; padding-top: 8px; }
 .form-field label, .dialog-form label { color: #374151; font-size: 13px; font-weight: 500; }
 .dialog-form input, .form-field input { width: 100%; }
-.user-form { margin-top: 24px; padding: 20px; border: 1px solid #d1e4f6; border-radius: 10px; background: #f8fbff; }
+.user-form { margin-top: 24px; padding: 20px; border: 1px solid var(--p-primary-100); border-radius: 10px; background: #f8fbff; }
 .fields-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
 :host ::ng-deep .form-field .p-select { width: 100%; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .form-error { color: #b42318; font-size: 14px; }
+.company-brand-form { display: grid; gap: 12px; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; }
+.logo-preview { display: flex; align-items: center; gap: 14px; }
+.logo-preview img { max-width: 150px; max-height: 64px; object-fit: contain; }
 @media (max-width: 640px) { .fields-grid { grid-template-columns: 1fr; } .user-form { padding: 14px; } }

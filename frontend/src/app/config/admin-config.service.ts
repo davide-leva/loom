@@ -7,6 +7,8 @@ export interface Company {
   id: number;
   name: string;
   teamCompany: boolean;
+  primaryColor: string;
+  logoUrl: string | null;
 }
 
 export type CompanyRole = 'USER' | 'SUPERUSER';
@@ -59,6 +61,7 @@ export interface Project {
   id: number;
   name: string;
   companyId: number | null;
+  logoUrl: string | null;
 }
 
 export interface ProjectInput {
@@ -111,12 +114,29 @@ export class AdminConfigService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
+  private brandForm(input: object, logo: File | null): FormData {
+    const form = new FormData();
+    form.append('input', new Blob([JSON.stringify(input)], { type: 'application/json' }));
+    if (logo) form.append('logo', logo);
+    return form;
+  }
+
   companies(): Observable<Company[]> {
     return this.http.get<Company[]>('/api/companies', { headers: this.auth.authHeaders() });
   }
 
-  createCompany(name: string): Observable<Company> {
-    return this.http.post<Company>('/api/companies', { name }, { headers: this.auth.authHeaders() });
+  createCompany(name: string, primaryColor: string, logo: File | null): Observable<Company> {
+    return this.http.post<Company>('/api/companies', this.brandForm({ name, primaryColor }, logo),
+      { headers: this.auth.authHeaders() });
+  }
+
+  updateCompany(id: number, name: string, primaryColor: string, logo: File | null): Observable<Company> {
+    return this.http.put<Company>(`/api/companies/${id}`, this.brandForm({ name, primaryColor }, logo),
+      { headers: this.auth.authHeaders() });
+  }
+
+  deleteCompanyLogo(id: number): Observable<void> {
+    return this.http.delete<void>(`/api/companies/${id}/logo`, { headers: this.auth.authHeaders() });
   }
 
   companyUsers(companyId: number): Observable<CompanyUser[]> {
@@ -157,12 +177,18 @@ export class AdminConfigService {
     return this.http.get<Project[]>('/api/projects', { headers: this.auth.authHeaders() });
   }
 
-  createProject(input: ProjectInput): Observable<Project> {
-    return this.http.post<Project>('/api/projects', input, { headers: this.auth.authHeaders() });
+  createProject(input: ProjectInput, logo: File | null = null): Observable<Project> {
+    return this.http.post<Project>('/api/projects', this.brandForm(input, logo),
+      { headers: this.auth.authHeaders() });
   }
 
-  updateProject(id: number, input: ProjectInput): Observable<Project> {
-    return this.http.put<Project>(`/api/projects/${id}`, input, { headers: this.auth.authHeaders() });
+  updateProject(id: number, input: ProjectInput, logo: File | null = null): Observable<Project> {
+    return this.http.put<Project>(`/api/projects/${id}`, this.brandForm(input, logo),
+      { headers: this.auth.authHeaders() });
+  }
+
+  deleteProjectLogo(id: number): Observable<void> {
+    return this.http.delete<void>(`/api/projects/${id}/logo`, { headers: this.auth.authHeaders() });
   }
 
   deleteProject(id: number): Observable<void> {

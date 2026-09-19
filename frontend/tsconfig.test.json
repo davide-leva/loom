@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist/out-tsc/tests",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "types": ["node"],
+    "verbatimModuleSyntax": false
+  },
+  "files": [
+    "src/app/issue-filters.test.ts"
+  ]
+}

@@ -1,33 +1,76 @@
 <div class="app-shell">
   <header class="app-header">
-    <a class="brand" routerLink="/dashboard" aria-label="Software Due, Dashboard">
-      <img src="/Logo_SoftwareDue.svg" alt="Software Due" />
-      <span>Tickets</span>
+    <a class="brand" routerLink="/dashboard" aria-label="Dashboard">
+      @if (auth.user()?.internalLogoUrl; as logo) {
+        <img [src]="logo" [alt]="'Logo ' + (auth.user()?.internalCompanyName ?? 'compagnia interna')" />
+      } @else {
+        <span>{{ auth.user()?.internalCompanyName ?? 'Tickets' }}</span>
+      }
+      @if (auth.user()?.role === 'USER' || auth.user()?.role === 'SUPERUSER') {
+        @if (auth.user()?.companyLogoUrl; as customerLogo) {
+          <img [src]="customerLogo" [alt]="'Logo ' + auth.user()?.companyName" />
+        } @else {
+          <span>{{ auth.user()?.companyName }}</span>
+        }
+      }
     </a>
 
     <nav class="main-nav" aria-label="Navigazione principale">
-      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
-      <a routerLink="/anomalie" routerLinkActive="active">Anomalie</a>
-      <a routerLink="/migliorie" routerLinkActive="active">Migliorie</a>
-      <a routerLink="/implementazioni" routerLinkActive="active">Implementazioni</a>
+      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><i class="pi pi-chart-bar" aria-hidden="true"></i>Dashboard</a>
+      @if (auth.user()?.role === 'ADMIN' || auth.user()?.role === 'TEAM') {
+        <a routerLink="/eventi" routerLinkActive="active"><i class="pi pi-history" aria-hidden="true"></i>Eventi</a>
+      }
       @if (auth.user()?.role === 'ADMIN') {
-        <a routerLink="/pianificazione" routerLinkActive="active">Pianificazione</a>
-        <a routerLink="/configurazione" routerLinkActive="active">Configurazione</a>
+        <a routerLink="/pianificazione" routerLinkActive="active"><i class="pi pi-calendar" aria-hidden="true"></i>Pianificazione
+          @if (notifications.count('PLANNING'); as count) { <span class="notification-badge" [attr.aria-label]="count + ' issue non lette'">{{ count }}</span> }
+        </a>
+      }
+      <a routerLink="/anomalie" routerLinkActive="active"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i>Anomalie
+        @if (notifications.count('ANOMALY'); as count) { <span class="notification-badge" [attr.aria-label]="count + ' issue non lette'">{{ count }}</span> }
+      </a>
+      <a routerLink="/migliorie" routerLinkActive="active"><i class="pi pi-lightbulb" aria-hidden="true"></i>Migliorie
+        @if (notifications.count('IMPROVEMENT'); as count) { <span class="notification-badge" [attr.aria-label]="count + ' issue non lette'">{{ count }}</span> }
+      </a>
+      <a routerLink="/implementazioni" routerLinkActive="active"><i class="pi pi-code" aria-hidden="true"></i>Implementazioni
+        @if (notifications.count('IMPLEMENTATION'); as count) { <span class="notification-badge" [attr.aria-label]="count + ' issue non lette'">{{ count }}</span> }
+      </a>
+      @if (auth.user()?.role === 'ADMIN') {
+        <a routerLink="/configurazione" routerLinkActive="active"><i class="pi pi-cog" aria-hidden="true"></i>Configurazione</a>
       }
     </nav>
 
     <div class="header-actions">
+      @if (projectContext.currentProjectId()) {
+        <span class="live-status" [class.connected]="liveSync.connected()" role="status">
+          <i class="pi" [class.pi-circle-fill]="liveSync.connected()" [class.pi-sync]="!liveSync.connected()" aria-hidden="true"></i>
+          {{ liveSync.connected() ? 'Live' : 'Riconnessione...' }}
+        </span>
+      }
       <label class="project-picker">
-        <span>Progetto</span>
         <p-select inputId="current-project" [options]="projectContext.projects()"
                   optionLabel="name" optionValue="id" [ngModel]="projectContext.currentProjectId()"
                   (ngModelChange)="projectContext.select($event)" [disabled]="projectContext.projects().length === 0"
                   [placeholder]="projectContext.loadError() ? 'Non disponibile' : 'Nessun progetto'"
-                  appendTo="body" />
+                  appendTo="body">
+          <ng-template #selectedItem let-project>
+            @if (project?.logoUrl) {
+              <img class="project-logo" [src]="project.logoUrl" [alt]="project.name" />
+            } @else {
+              {{ project?.name }}
+            }
+          </ng-template>
+          <ng-template #item let-project>
+            @if (project.logoUrl) {
+              <img class="project-logo" [src]="project.logoUrl" [alt]="project.name" />
+            } @else {
+              {{ project.name }}
+            }
+          </ng-template>
+        </p-select>
       </label>
 
       <p-menu #userMenu [model]="userMenuItems()" [popup]="true" appendTo="body" />
-      <p-button [label]="auth.user()?.username ?? 'Utente'" icon="pi pi-user" iconPos="left"
+      <p-button [label]="auth.user()?.displayName ?? 'Utente'" icon="pi pi-user" iconPos="left"
                 severity="secondary" [outlined]="true" (onClick)="userMenu.toggle($event)"
                 ariaLabel="Menu utente" />
     </div>

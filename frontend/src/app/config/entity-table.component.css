@@ -4,7 +4,7 @@
 .row-actions { display: flex; justify-content: flex-end; gap: 6px; }
 :host ::ng-deep .p-datatable { overflow-x: auto; }
 :host ::ng-deep .p-datatable-thead > tr > th { background: var(--p-primary-500); color: #fff; }
-:host ::ng-deep .p-datatable-tbody > tr:hover { background: #eef5fc; }
+:host ::ng-deep .p-datatable-tbody > tr:hover { background: var(--p-primary-50); }
 @media (max-width: 580px) {
   .table-tools input { flex: 1 1 100%; width: 100%; }
 }

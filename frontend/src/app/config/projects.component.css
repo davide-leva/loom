@@ -1,5 +1,5 @@
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
-h2 { margin: 0; color: #0f477e; font-size: 22px; }
+h2 { margin: 0; color: var(--p-primary-700); font-size: 22px; }
 .section-heading p { margin: 6px 0 0; color: #64748b; font-size: 14px; }
 .project-form, .form-field { display: flex; flex-direction: column; gap: 8px; }
 .project-form { gap: 18px; padding-top: 8px; }
@@ -9,8 +9,10 @@ h2 { margin: 0; color: #0f477e; font-size: 22px; }
 :host ::ng-deep .form-field .p-select { width: 100%; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .form-error { color: #b42318; font-size: 14px; }
+.logo-preview { display: flex; align-items: center; gap: 14px; }
+.logo-preview img { max-width: 150px; max-height: 64px; object-fit: contain; }
 .members-section { margin-top: 28px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
-.members-section h3 { margin: 0; color: #0f477e; font-size: 18px; }
+.members-section h3 { margin: 0; color: var(--p-primary-700); font-size: 18px; }
 .members-section p { margin: 6px 0 16px; color: #64748b; font-size: 14px; }
 .assign-user-row { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 14px; }
 :host ::ng-deep .assign-user-row .p-select { width: min(100%, 360px); }
@@ -26,13 +28,13 @@ h2 { margin: 0; color: #0f477e; font-size: 22px; }
   padding: 2px 8px;
   border-radius: 999px;
   background: #e7f1fb;
-  color: #0f477e;
+  color: var(--p-primary-700);
   font-size: 12px;
   font-weight: 600;
 }
 .membership-lock { background: #edf7ed; color: #287233; }
 :host ::ng-deep .member-table .p-datatable-thead > tr > th { background: var(--p-primary-500); color: #fff; }
-:host ::ng-deep .member-table .p-datatable-tbody > tr:hover > td { background: #eef5fc; }
+:host ::ng-deep .member-table .p-datatable-tbody > tr:hover > td { background: var(--p-primary-50); }
 @media (max-width: 640px) {
   .assign-user-row { justify-content: stretch; flex-direction: column; }
   :host ::ng-deep .assign-user-row .p-select { width: 100%; }

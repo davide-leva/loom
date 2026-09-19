@@ -20,6 +20,18 @@
     <label for="company-name">Nome compagnia</label>
     <input pInputText id="company-name" name="name" [(ngModel)]="newCompanyName"
            maxlength="64" required autofocus />
+    <label for="company-color">Colore principale</label>
+    <p-select inputId="company-color" name="primaryColor" [options]="colors"
+              [(ngModel)]="newCompanyColor" />
+    <label>Logo (opzionale)</label>
+    <p-fileupload mode="advanced" styleClass="app-file-upload" [multiple]="false" [customUpload]="true"
+                  [showUploadButton]="false" [auto]="false" [maxFileSize]="2097152"
+                  accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                  chooseLabel="Seleziona logo" cancelLabel="Rimuovi"
+                  invalidFileSizeMessageSummary="File troppo grande"
+                  invalidFileSizeMessageDetail="Il logo non può superare 2 MB."
+                  (onSelect)="selectLogo($event, true)" (onClear)="clearLogo(true)"
+                  (onRemove)="clearLogo(true)" />
     @if (companySaveError) { <p class="form-error" role="alert">{{ companySaveError }}</p> }
     <div class="dialog-actions">
       <p-button label="Annulla" severity="secondary" [outlined]="true" type="button"
@@ -36,6 +48,43 @@
           [closable]="!savingUser && !deletingUser" [closeOnEscape]="!savingUser && !deletingUser"
           (onHide)="closeCompany()">
   @if (selectedCompany) {
+    <form #brandForm="ngForm" (ngSubmit)="saveCompanyDetails()" class="company-brand-form">
+      <h3>Identità della compagnia</h3>
+      <div class="fields-grid">
+        <div class="form-field">
+          <label for="edit-company-name">Nome *</label>
+          <input pInputText id="edit-company-name" name="companyName" [(ngModel)]="companyName" maxlength="64" required />
+        </div>
+        <div class="form-field">
+          <label for="edit-company-color">Colore principale *</label>
+          <p-select inputId="edit-company-color" name="companyColor" [options]="colors"
+                    [(ngModel)]="companyColor" />
+        </div>
+      </div>
+      <div class="form-field">
+        <label>Logo (opzionale)</label>
+        <p-fileupload mode="advanced" styleClass="app-file-upload" [multiple]="false" [customUpload]="true"
+                      [showUploadButton]="false" [auto]="false" [maxFileSize]="2097152"
+                      accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                      chooseLabel="Seleziona logo" cancelLabel="Rimuovi"
+                      invalidFileSizeMessageSummary="File troppo grande"
+                      invalidFileSizeMessageDetail="Il logo non può superare 2 MB."
+                      (onSelect)="selectLogo($event, false)" (onClear)="clearLogo(false)"
+                      (onRemove)="clearLogo(false)" />
+      </div>
+      @if (selectedCompany.logoUrl) {
+        <div class="logo-preview">
+          <img [src]="selectedCompany.logoUrl" [alt]="'Logo ' + selectedCompany.name" />
+          <p-button type="button" label="Rimuovi logo" severity="secondary" [outlined]="true"
+                    [disabled]="savingCompanyDetails" (onClick)="removeCompanyLogo()" />
+        </div>
+      }
+      @if (companyDetailsError) { <p class="form-error" role="alert">{{ companyDetailsError }}</p> }
+      <div class="dialog-actions">
+        <p-button type="submit" label="Salva compagnia" icon="pi pi-check" [loading]="savingCompanyDetails"
+                  [disabled]="brandForm.invalid || !companyName.trim() || savingCompanyDetails" />
+      </div>
+    </form>
     <div class="users-heading">
       <div>
         <h3>Utenti della compagnia</h3>
@@ -85,11 +134,11 @@
           </div>
           <div class="form-field">
             <label for="new-user-password">
-              {{ editingUser ? 'Nuova password (lascia vuoto per mantenerla)' : 'Password * (almeno 12 caratteri)' }}
+              {{ editingUser ? 'Nuova password (lascia vuoto per mantenerla)' : 'Password * (almeno 8 caratteri)' }}
             </label>
             <p-password inputId="new-user-password" name="password" [(ngModel)]="newUser.password"
                         [feedback]="false" [toggleMask]="true" [style]="{ width: '100%' }"
-                        [inputStyle]="{ width: '100%' }" [required]="!editingUser" minlength="12" />
+                        [inputStyle]="{ width: '100%' }" [required]="!editingUser" minlength="8" />
           </div>
         </div>
         @if (userSaveError) { <p class="form-error" role="alert">{{ userSaveError }}</p> }
@@ -98,7 +147,7 @@
                     [disabled]="savingUser" (onClick)="userFormVisible = false" />
           <p-button [label]="editingUser ? 'Salva modifiche' : 'Crea utente'" icon="pi pi-check"
                     type="submit" [loading]="savingUser"
-                    [disabled]="userForm.invalid || !newUser.username.trim() || !newUser.email.trim() || (!editingUser && newUser.password.length < 12) || (newUser.password.length > 0 && newUser.password.length < 12) || savingUser" />
+                    [disabled]="userForm.invalid || !newUser.username.trim() || !newUser.email.trim() || (!editingUser && newUser.password.length < 8) || (newUser.password.length > 0 && newUser.password.length < 8) || savingUser" />
         </div>
       </form>
     }

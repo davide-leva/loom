@@ -1,7 +1,8 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { Location } from '@angular/common';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
@@ -9,6 +10,8 @@ import { PasswordModule } from 'primeng/password';
 import { finalize } from 'rxjs';
 import { AuthService } from './auth.service';
 import { SetupService } from './setup.service';
+import { ProjectContextService } from './project-context.service';
+import { applyBrandColor } from './brand-colors';
 
 @Component({
   selector: 'app-login',
@@ -20,6 +23,12 @@ export class LoginComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly setup = inject(SetupService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly location = inject(Location);
+  private readonly projects = inject(ProjectContextService);
+  private readonly http = inject(HttpClient);
+  internalBrand: { name: string; primaryColor: string; logoUrl: string | null } =
+    { name: 'Tickets', primaryColor: 'blue', logoUrl: null };
 
   username = '';
   password = '';
@@ -27,6 +36,28 @@ export class LoginComponent implements OnInit {
   error = '';
 
   ngOnInit(): void {
+    this.http.get<typeof this.internalBrand>('/api/branding/internal').subscribe({
+      next: brand => {
+        this.internalBrand = brand;
+        if (!this.auth.user()) applyBrandColor(brand.primaryColor);
+      }
+    });
+    const externalToken = this.route.snapshot.queryParamMap.get('t');
+    if (externalToken !== null) {
+      this.location.replaceState('/login');
+      this.loading = true;
+      this.auth.loginExternal(externalToken).pipe(finalize(() => this.loading = false)).subscribe({
+        next: projectId => {
+          this.projects.rememberExternalProject(projectId);
+          void this.router.navigateByUrl('/');
+        },
+        error: (error: unknown) => {
+          this.error = error instanceof HttpErrorResponse && error.status === 401
+            ? 'Token di accesso esterno non valido o scaduto.'
+            : 'Accesso con token non disponibile. Verifica che il backend sia aggiornato e raggiungibile.';
+        }
+      });
+    }
     this.setup.status().subscribe({ next: status => { if (status.required) void this.router.navigateByUrl('/setup'); } });
   }
 

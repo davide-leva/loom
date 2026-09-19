@@ -1,8 +1,10 @@
 <main class="login-page">
   <div class="login-content">
     <div class="brand">
-      <img src="/Logo_SoftwareDue.svg" alt="Software Due" />
-      <span>Tickets Platform</span>
+      @if (internalBrand.logoUrl) {
+        <img [src]="internalBrand.logoUrl" [alt]="'Logo ' + internalBrand.name" />
+      }
+      <span>{{ internalBrand.name }}</span>
     </div>
 
     <p-card styleClass="login-card">
@@ -14,6 +16,9 @@
       </ng-template>
 
       <form (ngSubmit)="login()">
+        @if (loading && !username) {
+          <p>Verifica dell’accesso esterno in corso…</p>
+        }
         <div class="form-group">
           <label for="username">Username</label>
           <input pInputText id="username" name="username" type="text" [(ngModel)]="username"

@@ -36,6 +36,23 @@
                 filterBy="name" appendTo="body" />
       <small>Il progetto può esistere anche senza una compagnia collegata.</small>
     </div>
+    <div class="form-field">
+      <label>Logo del progetto (opzionale)</label>
+      <p-fileupload mode="advanced" styleClass="app-file-upload" [multiple]="false" [customUpload]="true"
+                    [showUploadButton]="false" [auto]="false" [maxFileSize]="2097152"
+                    accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                    chooseLabel="Seleziona logo" cancelLabel="Rimuovi"
+                    invalidFileSizeMessageSummary="File troppo grande"
+                    invalidFileSizeMessageDetail="Il logo non può superare 2 MB."
+                    (onSelect)="selectLogo($event)" (onClear)="logo = null" (onRemove)="logo = null" />
+      @if (editingProject?.logoUrl) {
+        <div class="logo-preview">
+          <img [src]="editingProject?.logoUrl" [alt]="'Logo ' + editingProject?.name" />
+          <p-button type="button" label="Rimuovi logo" severity="secondary" [outlined]="true"
+                    [disabled]="saving" (onClick)="removeLogo()" />
+        </div>
+      }
+    </div>
     @if (saveError) { <p class="form-error" role="alert">{{ saveError }}</p> }
     <div class="dialog-actions">
       <p-button label="Annulla" severity="secondary" [outlined]="true" type="button"

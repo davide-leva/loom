@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
+import { FileSelectEvent, FileUploadModule } from 'primeng/fileupload';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
@@ -29,7 +30,7 @@ interface UserOption {
 
 @Component({
   selector: 'app-projects',
-  imports: [FormsModule, ButtonModule, CardModule, DialogModule, InputTextModule, SelectModule,
+  imports: [FormsModule, ButtonModule, CardModule, DialogModule, FileUploadModule, InputTextModule, SelectModule,
     TableModule, EntityTableComponent],
   templateUrl: './projects.component.html',
   styleUrl: './projects.component.css'
@@ -54,6 +55,7 @@ export class ProjectsComponent implements OnInit {
   formVisible = false;
   editingProject: Project | null = null;
   draft: ProjectInput = { name: '', companyId: null };
+  logo: File | null = null;
   saveError = '';
   saving = false;
   members: AppUser[] = [];
@@ -94,6 +96,7 @@ export class ProjectsComponent implements OnInit {
   openCreate(): void {
     this.editingProject = null;
     this.draft = { name: '', companyId: null };
+    this.logo = null;
     this.saveError = '';
     this.formVisible = true;
   }
@@ -102,6 +105,7 @@ export class ProjectsComponent implements OnInit {
     this.editingProject = this.projects.find(project => project.id === row.id) ?? null;
     if (!this.editingProject) return;
     this.draft = { name: this.editingProject.name, companyId: this.editingProject.companyId };
+    this.logo = null;
     this.saveError = '';
     this.formVisible = true;
     this.loadMembers();
@@ -109,12 +113,33 @@ export class ProjectsComponent implements OnInit {
 
   closeForm(): void {
     this.editingProject = null;
+    this.logo = null;
     this.members = [];
     this.memberGroups = [];
     this.expandedMemberGroups = {};
     this.selectedExternalUserId = null;
     this.assignError = '';
     this.removingUserId = null;
+  }
+
+  selectLogo(event: FileSelectEvent): void {
+    this.logo = event.currentFiles[event.currentFiles.length - 1] ?? null;
+  }
+
+  removeLogo(): void {
+    const project = this.editingProject;
+    if (!project?.logoUrl || this.saving) return;
+    this.saving = true;
+    this.api.deleteProjectLogo(project.id).pipe(finalize(() => this.saving = false)).subscribe({
+      next: () => {
+        const updated = { ...project, logoUrl: null };
+        this.editingProject = updated;
+        this.projects = this.projects.map(item => item.id === project.id ? updated : item);
+        this.updateRows();
+        this.projectContext.load();
+      },
+      error: () => this.saveError = 'Impossibile rimuovere il logo.'
+    });
   }
 
   loadMembers(): void {
@@ -184,14 +209,15 @@ export class ProjectsComponent implements OnInit {
     this.saving = true;
     this.saveError = '';
     const request = editing
-      ? this.api.updateProject(editing.id, input)
-      : this.api.createProject(input);
+      ? this.api.updateProject(editing.id, input, this.logo)
+      : this.api.createProject(input, this.logo);
     request.pipe(finalize(() => this.saving = false)).subscribe({
       next: project => {
         this.projects = editing
           ? this.projects.map(existing => existing.id === project.id ? project : existing)
           : [...this.projects, project];
         this.updateRows();
+        this.logo = null;
         this.projectContext.load();
         if (editing) {
           this.editingProject = project;
@@ -269,7 +295,7 @@ export class ProjectsComponent implements OnInit {
       const groupId = user.companyId === null ? 'instance-users' : `external-company-${user.companyId}`;
       const group = explicitGroups.get(groupId) ?? {
         id: groupId,
-        label: user.companyId === null ? 'Istanza Software Due' : this.userCompanyName(user),
+        label: user.companyId === null ? 'Compagnia interna' : this.userCompanyName(user),
         description: user.companyId === null
           ? 'Utenti interni assegnati esplicitamente'
           : 'Utenti esterni assegnati esplicitamente',
@@ -291,7 +317,7 @@ export class ProjectsComponent implements OnInit {
   }
 
   private userCompanyName(user: AppUser): string {
-    if (user.companyId === null) return 'Software Due';
+    if (user.companyId === null) return 'Compagnia interna';
     return this.companies.find(company => company.id === user.companyId)?.name ?? 'Compagnia non disponibile';
   }
 

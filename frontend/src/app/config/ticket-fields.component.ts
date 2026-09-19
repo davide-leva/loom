@@ -77,6 +77,7 @@ export class TicketFieldsComponent implements OnInit {
   deletingField = false;
 
   selectedField: IssueField | null = null;
+  fieldDetailVisible = false;
   options: IssueFieldOption[] = [];
   optionsLoading = false;
   optionsError = '';
@@ -92,7 +93,7 @@ export class TicketFieldsComponent implements OnInit {
   previewVisible = false;
   previewLoading = false;
   previewOptions = new Map<number, IssueFieldOption[]>();
-  previewModel: IssueFormModel = { title: '', description: '', values: {}, attachments: {} };
+  previewModel: IssueFormModel = { title: '', description: '', values: {}, attachments: {}, internal: false };
 
   ngOnInit(): void {
     this.loadProjects();
@@ -119,6 +120,9 @@ export class TicketFieldsComponent implements OnInit {
     this.fields = [];
     this.fieldRows = [];
     this.selectedField = null;
+    this.fieldDetailVisible = false;
+    this.editingField = null;
+    this.fieldDraft = this.emptyField();
     this.options = [];
     this.previewOptions.clear();
     if (projectId !== null) this.loadFields();
@@ -136,6 +140,9 @@ export class TicketFieldsComponent implements OnInit {
         this.updateFieldRows();
         if (this.selectedField && !this.fields.some(field => field.id === this.selectedField?.id)) {
           this.selectedField = null;
+          this.fieldDetailVisible = false;
+          this.editingField = null;
+          this.fieldDraft = this.emptyField();
           this.options = [];
         }
         this.previewOptions.clear();
@@ -151,18 +158,12 @@ export class TicketFieldsComponent implements OnInit {
     this.fieldFormVisible = true;
   }
 
-  editField(field: IssueField): void {
-    this.editingField = field;
-    this.fieldDraft = {
-      code: field.code,
-      label: field.label,
-      type: field.type,
-      scope: field.scope,
-      mandatory: field.mandatory,
-      multiple: field.multiple
-    };
+  closeFieldForm(): void {
+    if (this.savingField) return;
+    this.fieldFormVisible = false;
+    this.editingField = null;
+    this.fieldDraft = this.emptyField();
     this.fieldSaveError = '';
-    this.fieldFormVisible = true;
   }
 
   saveField(): void {
@@ -180,21 +181,28 @@ export class TicketFieldsComponent implements OnInit {
 
     this.savingField = true;
     this.fieldSaveError = '';
-    const request = this.editingField
-      ? this.api.updateIssueField(this.editingField.id, input)
+    const editing = this.editingField;
+    const editingInDetail = editing !== null && this.fieldDetailVisible
+      && this.selectedField?.id === editing.id;
+    const request = editing
+      ? this.api.updateIssueField(editing.id, input)
       : this.api.createIssueField({ ...input, projectId });
     request.pipe(finalize(() => this.savingField = false)).subscribe({
       next: field => {
-        this.fields = this.sortFields(this.editingField
+        this.fields = this.sortFields(editing
           ? this.fields.map(existing => existing.id === field.id ? field : existing)
           : [...this.fields, field]);
         this.updateFieldRows();
-        this.fieldFormVisible = false;
-        this.editingField = null;
-        this.fieldDraft = this.emptyField();
-        if (this.selectedField?.id === field.id) {
+        if (editingInDetail) {
           this.selectedField = field;
-          if (field.type !== 'SELECT') this.options = [];
+          this.editingField = field;
+          this.fieldDraft = this.fieldDraftFrom(field);
+          this.options = [];
+          if (field.type === 'SELECT') this.loadOptions();
+        } else {
+          this.fieldFormVisible = false;
+          this.editingField = null;
+          this.fieldDraft = this.emptyField();
         }
         this.previewOptions.clear();
       },
@@ -223,6 +231,9 @@ export class TicketFieldsComponent implements OnInit {
         this.updateFieldRows();
         if (this.selectedField?.id === field.id) {
           this.selectedField = null;
+          this.fieldDetailVisible = false;
+          this.editingField = null;
+          this.fieldDraft = this.emptyField();
           this.options = [];
         }
         this.previewOptions.clear();
@@ -233,12 +244,29 @@ export class TicketFieldsComponent implements OnInit {
     });
   }
 
-  openOptions(field: IssueField): void {
+  openField(field: IssueField): void {
     this.selectedField = field;
+    this.editingField = field;
+    this.fieldDraft = this.fieldDraftFrom(field);
+    this.fieldSaveError = '';
+    this.fieldDetailVisible = true;
     this.optionFormVisible = false;
     this.editingOption = null;
     this.options = [];
     if (field.type === 'SELECT') this.loadOptions();
+  }
+
+  closeField(): void {
+    if (this.savingField || this.savingOption || this.deletingOption) return;
+    this.fieldDetailVisible = false;
+    this.editingField = null;
+    this.fieldDraft = this.emptyField();
+    this.fieldSaveError = '';
+    this.selectedField = null;
+    this.options = [];
+    this.optionFormVisible = false;
+    this.editingOption = null;
+    this.optionDraft = this.emptyOption();
   }
 
   loadOptions(): void {
@@ -327,6 +355,10 @@ export class TicketFieldsComponent implements OnInit {
     return this.typeOptions.find(option => option.value === type)?.label ?? type;
   }
 
+  scopeLabel(scope: FieldScope): string {
+    return this.scopeOptions.find(option => option.value === scope)?.label ?? scope;
+  }
+
   openPreview(): void {
     if (this.selectedProjectId === null || this.previewLoading) return;
     const selectFields = this.previewFields().filter(field => field.type === 'SELECT');
@@ -371,6 +403,17 @@ export class TicketFieldsComponent implements OnInit {
     return { code: '', label: '', type: 'TEXT', scope: 'USER', mandatory: false, multiple: false };
   }
 
+  private fieldDraftFrom(field: IssueField): FieldDraft {
+    return {
+      code: field.code,
+      label: field.label,
+      type: field.type,
+      scope: field.scope,
+      mandatory: field.mandatory,
+      multiple: field.multiple
+    };
+  }
+
   private emptyOption(): OptionDraft {
     return { value: '', label: '', active: true };
   }
@@ -387,7 +430,7 @@ export class TicketFieldsComponent implements OnInit {
     this.fieldRows = this.fields.map(field => ({
       ...field,
       typeLabel: this.typeLabel(field.type),
-      scopeLabel: this.scopeOptions.find(option => option.value === field.scope)?.label ?? field.scope,
+      scopeLabel: this.scopeLabel(field.scope),
       mandatoryLabel: field.mandatory ? 'Si' : 'No',
       multipleLabel: field.multiple ? 'Si' : 'No'
     }));

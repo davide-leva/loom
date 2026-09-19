@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { forkJoin, of } from 'rxjs';
+import { AuthService } from './auth.service';
 import { IssueFormComponent, IssueFormModel } from './issue-form.component';
 import {
   IssueField,
@@ -10,6 +11,7 @@ import {
   IssueFieldValueInput,
   IssueSummary,
   IssuesService,
+  FieldScope,
   ProjectUserSummary
 } from './issues.service';
 
@@ -25,7 +27,8 @@ import {
         @if (schemaLoading) {
           <p class="loading-message">Carico campi del progetto...</p>
         } @else {
-          <app-issue-form [model]="formModel" [fields]="fields" [optionsByField]="optionsByField" />
+          <app-issue-form [model]="formModel" [fields]="fields" [optionsByField]="optionsByField"
+                          [visibleScopes]="visibleScopes()" [showInternalControl]="isInternalUser()" />
         }
 
         @if (error) {
@@ -53,6 +56,7 @@ import {
 })
 export class IssueCreateDialogComponent {
   private readonly issuesApi = inject(IssuesService);
+  private readonly auth = inject(AuthService);
 
   @Input({ required: true }) projectId: number | null = null;
   @Input() users: ProjectUserSummary[] = [];
@@ -65,7 +69,7 @@ export class IssueCreateDialogComponent {
   error = '';
   fields: IssueField[] = [];
   optionsByField = new Map<number, IssueFieldOption[]>();
-  formModel: IssueFormModel = { title: '', description: '', values: {}, attachments: {} };
+  formModel: IssueFormModel = { title: '', description: '', values: {}, attachments: {}, internal: false };
 
 
   private loadedProjectId: number | null = null;
@@ -89,7 +93,8 @@ export class IssueCreateDialogComponent {
       projectId: this.projectId,
       title: this.formModel.title.trim(),
       description: this.formModel.description.trim(),
-      values: this.customValues()
+      values: this.customValues(),
+      internal: this.isInternalUser() && this.formModel.internal
     }).subscribe({
       next: issue => this.uploadAttachments(issue),
       error: () => {
@@ -139,6 +144,7 @@ export class IssueCreateDialogComponent {
         if (this.projectId !== projectId) return;
         this.fields = this.sortFields(fields);
         this.optionsByField = this.groupOptions(options);
+        this.formModel.internal = this.isInternalUser();
         this.schemaLoading = false;
       },
       error: () => {
@@ -151,17 +157,33 @@ export class IssueCreateDialogComponent {
 
   private mandatoryFieldsFilled(): boolean {
     return this.fields
-      .filter(field => field.mandatory && field.type !== 'ATTACHMENTS')
-      .every(field => (this.formModel.values[field.id] ?? '').trim().length > 0);
+      .filter(field => this.visibleScopes().includes(field.scope) && field.mandatory && field.type !== 'ATTACHMENTS')
+      .every(field => {
+        const value = this.formModel.values[field.id];
+        return Array.isArray(value) ? value.length > 0 : (value ?? '').trim().length > 0;
+      });
   }
 
   private customValues(): IssueFieldValueInput[] {
     return this.fields
-      .filter(field => field.type !== 'ATTACHMENTS')
+      .filter(field => this.visibleScopes().includes(field.scope) && field.type !== 'ATTACHMENTS')
       .flatMap(field => {
-        const value = (this.formModel.values[field.id] ?? '').trim();
-        return value ? [{ definitionId: field.id, position: 0, value }] : [];
+        const rawValue = this.formModel.values[field.id];
+        const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+        return values
+          .map(value => (value ?? '').trim())
+          .filter(value => value.length > 0)
+          .map((value, position) => ({ definitionId: field.id, position, value }));
       });
+  }
+
+  isInternalUser(): boolean {
+    const role = this.auth.user()?.role;
+    return role === 'TEAM' || role === 'ADMIN';
+  }
+
+  visibleScopes(): FieldScope[] {
+    return this.isInternalUser() ? ['USER', 'TEAM'] : ['USER'];
   }
 
   private groupOptions(options: IssueFieldOption[]): Map<number, IssueFieldOption[]> {

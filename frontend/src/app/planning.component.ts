@@ -9,6 +9,8 @@ import { forkJoin } from 'rxjs';
 import { IssueDetailDialogComponent } from './issue-detail-dialog.component';
 import { IssueSummary, IssueType, IssuesService, ProjectUserSummary, TYPE_LABELS } from './issues.service';
 import { ProjectContextService } from './project-context.service';
+import { LiveSyncService } from './live-sync.service';
+import { IssueNotificationsService } from './issue-notifications.service';
 
 interface PlanningColumn {
   title: string;
@@ -49,10 +51,15 @@ interface SelectOption<T> { label: string; value: T; }
 
               <div class="cards">
                 @for (issue of issuesFor(column); track issue.id) {
-                  <div class="planning-card-item" draggable="true" [class.saving]="savingIssueId() === issue.id"
+                  <div class="planning-card-item" draggable="true" [class.internal-issue]="issue.internal"
+                       [class.saving]="savingIssueId() === issue.id"
                        (dragstart)="startDrag(issue)" (click)="openDetail(issue)">
                     <div class="card-main">
-                      <strong>#{{ issue.id }}</strong>
+                      <strong>#{{ issue.id }}
+                        @if (notifications.isUnread(issue.id)) {
+                          <span class="issue-unread-dot" title="Nuova o aggiornata" aria-label="Issue nuova o aggiornata"></span>
+                        }
+                      </strong>
                       <span>{{ issue.createdAt | date:'dd/MM/yyyy' }}</span>
                     </div>
                     <h2>{{ issue.title }}</h2>
@@ -80,8 +87,10 @@ interface SelectOption<T> { label: string; value: T; }
   styleUrl: './planning.component.css'
 })
 export class PlanningComponent {
+  private readonly eventSync = inject(LiveSyncService);
   readonly projects = inject(ProjectContextService);
   private readonly issuesApi = inject(IssuesService);
+  readonly notifications = inject(IssueNotificationsService);
 
   readonly issues = signal<IssueSummary[]>([]);
   readonly users = signal<ProjectUserSummary[]>([]);
@@ -100,15 +109,23 @@ export class PlanningComponent {
 
   private draggedIssue: IssueSummary | null = null;
   private lastProjectId: number | null = null;
+  private lastRevision = -1;
+  private loadSequence = 0;
 
   constructor() {
     effect(() => {
       const projectId = this.projects.currentProjectId();
-      if (projectId === this.lastProjectId) return;
+      const revision = this.eventSync.revision();
+      if (projectId === this.lastProjectId && revision === this.lastRevision) return;
+      const projectChanged = projectId !== this.lastProjectId;
       this.lastProjectId = projectId;
-      this.issues.set([]);
-      this.users.set([]);
-      this.error.set(null);
+      this.lastRevision = revision;
+      if (projectChanged) {
+        this.loadSequence++;
+        this.issues.set([]);
+        this.users.set([]);
+        this.error.set(null);
+      }
       if (projectId) this.load();
     });
   }
@@ -116,10 +133,12 @@ export class PlanningComponent {
   load(): void {
     const projectId = this.projects.currentProjectId();
     if (!projectId) return;
+    const sequence = ++this.loadSequence;
     this.loading.set(true);
     this.error.set(null);
     forkJoin({ issues: this.issuesApi.issues(projectId), users: this.issuesApi.projectUsers(projectId) }).subscribe({
       next: ({ issues, users }) => {
+        if (sequence !== this.loadSequence || projectId !== this.projects.currentProjectId()) return;
         this.issues.set(issues);
         this.users.set(users);
         this.developerOptions = [
@@ -129,6 +148,7 @@ export class PlanningComponent {
         this.loading.set(false);
       },
       error: () => {
+        if (sequence !== this.loadSequence || projectId !== this.projects.currentProjectId()) return;
         this.error.set('Non riesco a caricare la pianificazione.');
         this.loading.set(false);
       }

@@ -1,17 +1,19 @@
 :host { display: block; }
-h1 { margin: 0; color: #0f477e; font-size: 24px; }
+h1 { margin: 0; color: var(--p-primary-700); font-size: 24px; }
 .page-title { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 22px; }
 .page-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .page-title p { margin: 6px 0 0; color: #64748b; }
-.filters { display: grid; grid-template-columns: minmax(220px, 1.5fr) repeat(5, minmax(150px, 1fr)) auto; gap: 14px; align-items: end; margin-bottom: 18px; }
+.filters { display: grid; grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(150px, 1fr)) minmax(220px, 1fr) auto; gap: 14px; align-items: end; margin-bottom: 18px; }
 .filters label { display: flex; flex-direction: column; gap: 6px; color: #64748b; font-size: 13px; font-weight: 600; }
 .filters input { width: 100%; }
-.id-cell { font-weight: 700; color: #0f477e; }
+.id-cell { font-weight: 700; color: var(--p-primary-700); }
 .error-message { color: #b91c1c; font-weight: 600; }
 :host ::ng-deep .filters .p-select { width: 100%; }
+:host ::ng-deep .filters .p-datepicker { width: 100%; }
 :host ::ng-deep .issue-table .p-datatable-thead > tr > th { background: #f8fafc; color: #334155; }
 @media (max-width: 1100px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .page-title { flex-direction: column; } .page-actions { width: 100%; justify-content: stretch; } .filters { grid-template-columns: 1fr; } }
 
 .clickable-row { cursor: pointer; }
-.clickable-row:hover { background: #eef5fc; }
+.clickable-row:hover { background: var(--p-primary-50); }
+.clickable-row.internal-issue { background: var(--p-primary-50); }

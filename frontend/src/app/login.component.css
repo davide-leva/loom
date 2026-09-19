@@ -14,7 +14,7 @@
 .brand span {
   display: inline-block;
   margin-top: 8px;
-  color: #145ea8;
+  color: var(--p-primary-600);
   font-size: 16px;
   font-weight: 600;
   letter-spacing: .08em;

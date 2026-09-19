@@ -99,8 +99,8 @@ export class TeamUsersComponent implements OnInit {
       lastName: this.draft.lastName?.trim() || null,
       password: editing && !password ? null : password
     };
-    if (!input.username || !input.email || (!editing && password.length < 12)
-        || (password.length > 0 && password.length < 12)) return;
+    if (!input.username || !input.email || (!editing && password.length < 8)
+        || (password.length > 0 && password.length < 8)) return;
 
     this.saving = true;
     this.saveError = '';

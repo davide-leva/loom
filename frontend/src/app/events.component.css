@@ -1,0 +1,28 @@
+:host { display: block; }
+h1 { margin: 0; color: var(--p-primary-700); font-size: 24px; }
+.page-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+.page-title p { margin: 6px 0 0; color: #64748b; }
+.filters { display: grid; grid-template-columns: repeat(2, minmax(170px, 1fr)) minmax(220px, 1fr) auto auto; gap: 12px; align-items: end; margin-bottom: 20px; }
+.filters label { display: flex; flex-direction: column; gap: 6px; color: #64748b; font-size: 13px; font-weight: 600; }
+:host ::ng-deep .filters .p-select { width: 100%; }
+:host ::ng-deep .filters .p-datepicker { width: 100%; }
+.events-list { border-top: 1px solid #e2e8f0; }
+.event-row { display: flex; align-items: flex-start; gap: 14px; padding: 16px 4px; border-bottom: 1px solid #e2e8f0; }
+.event-row.internal-issue { background: var(--p-primary-50); }
+.event-icon { display: grid; place-items: center; flex: 0 0 38px; height: 38px; border-radius: 50%; color: var(--p-primary-700); background: var(--p-primary-100); }
+.event-body { flex: 1; min-width: 0; }
+.event-body strong { color: #1e293b; }
+.event-actor { color: var(--p-primary-700); }
+.event-issue-title { color: #64748b; font-size: 13px; }
+.event-body p { margin: 5px 0; color: #475569; overflow-wrap: anywhere; }
+.event-details { white-space: pre-wrap; line-height: 1.5; }
+.event-body small { color: #64748b; }
+.issue-link, .issue-reference { flex: 0 0 auto; color: var(--p-primary-700); font-weight: 700; }
+.issue-link { border: 0; padding: 0; background: none; cursor: pointer; text-decoration: underline; }
+.issue-title { display: flex; align-items: center; gap: 8px; min-height: 20px; margin-top: 3px; }
+.pagination { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; padding-top: 20px; }
+.pagination span { margin-right: auto; color: #64748b; }
+.error-message { color: #b91c1c; font-weight: 600; }
+.empty-message { padding: 24px 0; color: #64748b; }
+@media (max-width: 1000px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .page-title { flex-direction: column; } .filters { grid-template-columns: 1fr; } }

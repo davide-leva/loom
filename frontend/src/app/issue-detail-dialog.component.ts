@@ -1,14 +1,21 @@
 import { DatePipe } from '@angular/common';
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, EventEmitter, HostListener, Input, Output, effect, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { TagModule } from 'primeng/tag';
+import { forkJoin } from 'rxjs';
 import { AuthService } from './auth.service';
+import { LiveSyncService } from './live-sync.service';
+import { IssueFormComponent, IssueFormModel } from './issue-form.component';
 import {
   IssueAttachment,
   IssueComment,
   IssueDetail,
+  IssueField,
+  IssueFieldOption,
+  IssueFieldValueInput,
   IssueStatus,
   IssueSummary,
   IssuesService,
@@ -18,48 +25,95 @@ import {
 
 @Component({
   selector: 'app-issue-detail-dialog',
-  imports: [ButtonModule, DatePipe, DialogModule, FormsModule, TagModule],
+  imports: [ButtonModule, DatePipe, DialogModule, FormsModule, IssueFormComponent, TagModule],
   template: `
-    <p-dialog [header]="detail ? 'Issue #' + detail.issue.id : 'Issue'" [(visible)]="visible" [modal]="true"
+    <p-dialog [(visible)]="visible" [modal]="true"
               [style]="{ width: '1440px', maxWidth: '98vw' }" [breakpoints]="{ '720px': '96vw' }"
               [draggable]="false" [resizable]="false" (onHide)="closed.emit()">
+      <ng-template pTemplate="header">
+        <div class="dialog-title">
+          <span>{{ detail ? 'Issue #' + detail.issue.id : 'Issue' }}</span>
+          @if (detail) {
+            <p-tag [value]="statusLabel(detail.issue.status)" [severity]="statusSeverity(detail.issue.status)" />
+          }
+        </div>
+      </ng-template>
       @if (loading) {
         <p>Carico dettaglio...</p>
       } @else if (detail) {
         <section class="detail-grid" [class.has-comments]="detail.comments.length > 0">
           <div class="main-detail">
             <h2>{{ detail.issue.title }}</h2>
-            <div class="meta-row">
-              <p-tag [value]="statusLabel(detail.issue.status)" [severity]="statusSeverity(detail.issue.status)" />
-              <span>{{ typeLabel(detail.issue.issueType) }}</span>
-              <span>{{ detail.issue.createdAt | date:'dd/MM/yyyy HH:mm' }}</span>
-              <span>Segnalatore: {{ detail.issue.issuerUsername || 'N/D' }}</span>
-              <span>Sviluppatore: {{ detail.issue.devUsername || 'Non assegnato' }}</span>
+            <div class="auto-fields" aria-label="Campi automatici">
+              <div>
+                <dt>Tipologia</dt>
+                <dd>{{ typeLabel(detail.issue.issueType) }}</dd>
+              </div>
+              <div>
+                <dt>Data segnalazione</dt>
+                <dd>{{ detail.issue.createdAt | date:'dd/MM/yyyy HH:mm' }}</dd>
+              </div>
+              <div>
+                <dt>Segnalatore</dt>
+                <dd>{{ detail.issue.issuerUsername || 'N/D' }}</dd>
+              </div>
+              <div>
+                <dt>Sviluppatore</dt>
+                <dd>{{ detail.issue.devUsername || 'Non assegnato' }}</dd>
+              </div>
+              @if (detail.issue.internal) {
+                <div>
+                  <dt>Visibilità</dt>
+                  <dd>Solo Interna</dd>
+                </div>
+              }
             </div>
             <h3>Descrizione</h3>
             <p class="description">{{ detail.issue.description }}</p>
 
-            <h3>Campi</h3>
-            @if (detail.values.length) {
+            @if (displayValues().length) {
+              <h3>Campi</h3>
               <dl class="values-list">
-                @for (value of detail.values; track value.id) {
+                @for (value of displayValues(); track value.id) {
                   <div>
                     <dt>{{ value.label }}</dt>
                     <dd>{{ value.value }}</dd>
                   </div>
                 }
               </dl>
-            } @else {
-              <p class="muted">Nessun campo custom valorizzato.</p>
+            }
+
+            @if (canEditTeamFields() && teamFields.length) {
+              <div class="team-fields-editor">
+                <app-issue-form [model]="teamFormModel" [fields]="teamFields" [optionsByField]="optionsByField"
+                                [visibleScopes]="['TEAM']" [showStandardFields]="false"
+                                formTitle="Campi team" />
+              </div>
             }
 
             <h3>Allegati</h3>
             @if (detail.attachments.length) {
-              <ul class="attachments-list">
+              <ul class="attachments-grid">
                 @for (attachment of detail.attachments; track attachment.id) {
                   <li>
-                    <button type="button" (click)="openAttachment(attachment)">{{ attachment.originalName }}</button>
-                    <span>{{ fileSize(attachment.fileSize) }} · {{ attachment.uploadedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+                    <button type="button" class="attachment-card" (click)="openAttachment(attachment)"
+                            [attr.aria-label]="(isImage(attachment) ? 'Apri anteprima di ' : 'Scarica ') + attachment.originalName">
+                      <span class="attachment-thumbnail" [class.file-thumbnail]="!isImage(attachment)">
+                        @if (attachmentPreviewUrl(attachment); as thumbnailUrl) {
+                          <img [src]="thumbnailUrl" [alt]="''" />
+                        } @else {
+                          <i class="pi" [class.pi-spin]="isAttachmentLoading(attachment)"
+                             [class.pi-spinner]="isAttachmentLoading(attachment)"
+                             [class.pi-file]="!isAttachmentLoading(attachment)"></i>
+                        }
+                      </span>
+                      <span class="attachment-details">
+                        <strong>{{ attachment.originalName }}</strong>
+                        <small>{{ fileSize(attachment.fileSize) }} · {{ attachment.uploadedAt | date:'dd/MM/yyyy HH:mm' }}</small>
+                      </span>
+                      <i class="pi attachment-action" [class.pi-eye]="isImage(attachment)"
+                         [class.pi-download]="!isImage(attachment)"></i>
+                    </button>
                   </li>
                 }
               </ul>
@@ -67,17 +121,19 @@ import {
               <p class="muted">Nessun allegato caricato.</p>
             }
 
-            @if (canApprove()) {
-              <div class="approval-box">
-                <p>La issue è rilasciata. Puoi approvarla.</p>
-                <p-button label="Approva" icon="pi pi-check" [loading]="approving" (onClick)="approve()" />
-              </div>
-            }
-            @if (canDeleteIssue()) {
-              <div class="delete-box">
-                <p>Puoi eliminare questa issue.</p>
-                <p-button label="Elimina issue" icon="pi pi-trash" severity="danger" [loading]="deleting"
-                          (onClick)="deleteIssue()" />
+            @if (showIssueActions()) {
+              <div class="issue-actions">
+                @if (canEditTeamFields() && teamFields.length) {
+                  <p-button label="Salva campi team" icon="pi pi-save" [loading]="teamFieldsSaving"
+                            [disabled]="!teamFieldsValid()" (onClick)="saveTeamFields()" />
+                }
+                @if (canApprove()) {
+                  <p-button label="Approva" icon="pi pi-check" [loading]="approving" (onClick)="approve()" />
+                }
+                @if (canDeleteIssue()) {
+                  <p-button label="Elimina issue" icon="pi pi-trash" severity="danger" [loading]="deleting"
+                            (onClick)="deleteIssue()" />
+                }
               </div>
             }
           </div>
@@ -93,7 +149,8 @@ import {
                   </header>
                   <p>{{ comment.comment }}</p>
                   @if (comment.canDelete) {
-                    <p-button label="Elimina" size="small" severity="danger" [text]="true"
+                    <p-button icon="pi pi-trash" ariaLabel="Elimina commento" size="small"
+                              severity="danger" [text]="true" [rounded]="true"
                               (onClick)="deleteComment(comment)" />
                   }
                 </article>
@@ -103,7 +160,7 @@ import {
             </div>
             <form class="comment-form" (ngSubmit)="addComment()">
               <textarea name="comment" [(ngModel)]="commentDraft" rows="4" placeholder="Scrivi un commento"></textarea>
-              <p-button type="submit" label="Invia" icon="pi pi-send" [loading]="commentSaving"
+              <p-button type="submit" label="Invia" icon="pi pi-send" styleClass="w-full" [loading]="commentSaving"
                         [disabled]="!commentDraft.trim()" />
             </form>
           </aside>
@@ -113,17 +170,29 @@ import {
     </p-dialog>
 
     <p-dialog [header]="previewAttachment?.originalName || 'Anteprima allegato'" [(visible)]="previewVisible"
-              [modal]="true" [style]="{ width: '900px', maxWidth: '96vw' }"
+      [modal]="true" [style]="{ width: '900px', maxWidth: '96vw' }"
               [breakpoints]="{ '720px': '96vw' }" [draggable]="false" [resizable]="false"
               (onHide)="closePreview()">
-      @if (previewUrl) {
+      <div class="preview-viewer">
+        <p-button icon="pi pi-chevron-left" [rounded]="true" [outlined]="true"
+                  ariaLabel="Allegato precedente" [disabled]="!canShowPrevious()"
+                  (onClick)="showPrevious()" />
         <div class="image-preview">
-          <img [src]="previewUrl" [alt]="previewAttachment?.originalName || 'Anteprima allegato'" />
+          @if (previewLoading) {
+            <i class="pi pi-spinner pi-spin preview-spinner" aria-label="Caricamento anteprima"></i>
+          } @else if (previewUrl) {
+            <img [src]="previewUrl" [alt]="previewAttachment?.originalName || 'Anteprima allegato'" />
+          }
         </div>
-        <div class="preview-actions">
-          <p-button label="Scarica" icon="pi pi-download" (onClick)="downloadPreview()" />
-        </div>
-      }
+        <p-button icon="pi pi-chevron-right" [rounded]="true" [outlined]="true"
+                  ariaLabel="Allegato successivo" [disabled]="!canShowNext()"
+                  (onClick)="showNext()" />
+      </div>
+      <div class="preview-actions">
+        <span>{{ previewPositionLabel() }}</span>
+        <p-button label="Scarica" icon="pi pi-download" [disabled]="!previewBlob"
+                  (onClick)="downloadPreview()" />
+      </div>
     </p-dialog>
   `,
   styleUrl: './issue-detail-dialog.component.css'
@@ -131,6 +200,8 @@ import {
 export class IssueDetailDialogComponent {
   private readonly issuesApi = inject(IssuesService);
   private readonly auth = inject(AuthService);
+  private readonly events = inject(LiveSyncService);
+  private lastRevision = -1;
 
   @Input({ required: true }) issueId!: number;
   @Output() closed = new EventEmitter<void>();
@@ -142,27 +213,137 @@ export class IssueDetailDialogComponent {
   approving = false;
   deleting = false;
   commentSaving = false;
+  teamFieldsSaving = false;
   error = '';
   commentDraft = '';
   detail: IssueDetail | null = null;
+  teamFields: IssueField[] = [];
+  optionsByField = new Map<number, IssueFieldOption[]>();
+  teamFormModel: IssueFormModel = { title: '', description: '', values: {}, attachments: {}, internal: false };
   previewVisible = false;
+  previewLoading = false;
+  previewIndex = -1;
   previewAttachment: IssueAttachment | null = null;
   previewUrl: string | null = null;
-  private previewBlob: Blob | null = null;
+  previewBlob: Blob | null = null;
+  private readonly attachmentPreviewUrls = new Map<number, string>();
+  private readonly attachmentBlobs = new Map<number, Blob>();
+  private readonly loadingAttachmentIds = new Set<number>();
+  private loadSequence = 0;
+  private destroyed = false;
+
+  constructor() {
+    effect(() => {
+      const revision = this.events.revision();
+      if (this.lastRevision >= 0 && revision !== this.lastRevision && this.detail) this.load(true);
+      this.lastRevision = revision;
+    });
+  }
 
   ngOnInit(): void { this.load(); }
 
-  load(): void {
-    this.loading = true;
+  load(refresh = false): void {
+    const issueId = this.issueId;
+    const sequence = ++this.loadSequence;
+    if (!refresh) this.loading = true;
     this.error = '';
-    this.issuesApi.issueDetail(this.issueId).subscribe({
-      next: detail => { this.detail = detail; this.loading = false; },
-      error: () => { this.error = 'Non riesco a caricare il dettaglio issue.'; this.loading = false; }
+    this.issuesApi.issueDetail(issueId).subscribe({
+      next: detail => {
+        if (sequence !== this.loadSequence || issueId !== this.issueId) return;
+        this.detail = detail;
+        this.syncAttachmentPreviews(detail.attachments);
+        if (this.canEditTeamFields() && !refresh) {
+          this.loadTeamSchema(detail.issue.projectId);
+        } else {
+          this.loading = false;
+        }
+      },
+      error: (error: unknown) => {
+        if (sequence !== this.loadSequence || issueId !== this.issueId) return;
+        if (refresh && error instanceof HttpErrorResponse && error.status === 404) {
+          this.issueDeleted.emit(issueId);
+          this.closed.emit();
+          return;
+        }
+        this.error = 'Non riesco a caricare il dettaglio issue.';
+        this.loading = false;
+      }
     });
+  }
+
+  private loadTeamSchema(projectId: number): void {
+    forkJoin({
+      fields: this.issuesApi.issueFields(projectId),
+      options: this.issuesApi.issueFieldOptions(projectId)
+    }).subscribe({
+      next: ({ fields, options }) => {
+        this.teamFields = fields.filter(field => field.scope === 'TEAM')
+          .sort((a, b) => a.code.localeCompare(b.code, 'it'));
+        this.optionsByField = this.groupOptions(options);
+        this.fillTeamForm();
+        this.loading = false;
+      },
+      error: () => {
+        this.error = 'Non riesco a caricare i campi team.';
+        this.loading = false;
+      }
+    });
+  }
+
+  private fillTeamForm(): void {
+    const values: IssueFormModel['values'] = {};
+    for (const field of this.teamFields) {
+      const fieldValues = (this.detail?.values ?? [])
+        .filter(value => value.definitionId === field.id)
+        .sort((a, b) => a.position - b.position)
+        .map(value => value.value);
+      values[field.id] = field.multiple ? fieldValues : (fieldValues[0] ?? '');
+    }
+    this.teamFormModel = { title: '', description: '', values, attachments: {}, internal: false };
   }
 
   canApprove(): boolean {
     return this.auth.user()?.role === 'SUPERUSER' && this.detail?.issue.status === 'RELEASED';
+  }
+
+  canEditTeamFields(): boolean {
+    const role = this.auth.user()?.role;
+    return role === 'TEAM' || role === 'ADMIN';
+  }
+
+  showIssueActions(): boolean {
+    return (this.canEditTeamFields() && this.teamFields.length > 0) || this.canApprove() || this.canDeleteIssue();
+  }
+
+  displayValues() {
+    const teamFieldIds = new Set(this.teamFields.map(field => field.id));
+    return (this.detail?.values ?? []).filter(value => !teamFieldIds.has(value.definitionId));
+  }
+
+  teamFieldsValid(): boolean {
+    return this.teamFields
+      .filter(field => field.mandatory && field.type !== 'ATTACHMENTS')
+      .every(field => {
+        const value = this.teamFormModel.values[field.id];
+        return Array.isArray(value) ? value.length > 0 : (value ?? '').trim().length > 0;
+      });
+  }
+
+  saveTeamFields(): void {
+    if (!this.detail || !this.canEditTeamFields() || !this.teamFieldsValid() || this.teamFieldsSaving) return;
+    this.teamFieldsSaving = true;
+    this.issuesApi.updateIssueValues(this.detail.issue.id, this.teamValues()).subscribe({
+      next: detail => {
+        this.detail = detail;
+        this.syncAttachmentPreviews(detail.attachments);
+        this.fillTeamForm();
+        this.teamFieldsSaving = false;
+      },
+      error: () => {
+        this.error = 'Non riesco a salvare i campi team.';
+        this.teamFieldsSaving = false;
+      }
+    });
   }
 
   approve(): void {
@@ -228,16 +409,14 @@ export class IssueDetailDialogComponent {
       this.download(attachment);
       return;
     }
-    this.issuesApi.downloadAttachment(attachment.id).subscribe({
-      next: blob => {
-        this.revokePreviewUrl();
-        this.previewBlob = blob;
-        this.previewAttachment = attachment;
-        this.previewUrl = URL.createObjectURL(blob);
-        this.previewVisible = true;
-      },
-      error: () => this.error = 'Non riesco ad aprire l’anteprima allegato.'
-    });
+
+    this.previewAttachment = attachment;
+    this.previewIndex = this.imageAttachments().findIndex(item => item.id === attachment.id);
+    this.previewUrl = this.attachmentPreviewUrls.get(attachment.id) ?? null;
+    this.previewBlob = this.attachmentBlobs.get(attachment.id) ?? null;
+    this.previewLoading = !this.previewUrl;
+    this.previewVisible = true;
+    this.loadAttachmentPreview(attachment);
   }
 
   downloadPreview(): void {
@@ -247,9 +426,58 @@ export class IssueDetailDialogComponent {
 
   closePreview(): void {
     this.previewVisible = false;
+    this.previewLoading = false;
+    this.previewIndex = -1;
     this.previewAttachment = null;
     this.previewBlob = null;
-    this.revokePreviewUrl();
+    this.previewUrl = null;
+  }
+
+  imageAttachments(): IssueAttachment[] {
+    return (this.detail?.attachments ?? []).filter(attachment => this.isImage(attachment));
+  }
+
+  attachmentPreviewUrl(attachment: IssueAttachment): string | null {
+    return this.attachmentPreviewUrls.get(attachment.id) ?? null;
+  }
+
+  isAttachmentLoading(attachment: IssueAttachment): boolean {
+    return this.isImage(attachment) && this.loadingAttachmentIds.has(attachment.id);
+  }
+
+  canShowPrevious(): boolean {
+    return this.previewIndex > 0;
+  }
+
+  canShowNext(): boolean {
+    return this.previewIndex >= 0 && this.previewIndex < this.imageAttachments().length - 1;
+  }
+
+  showPrevious(): void {
+    if (!this.canShowPrevious()) return;
+    this.openAttachment(this.imageAttachments()[this.previewIndex - 1]);
+  }
+
+  showNext(): void {
+    if (!this.canShowNext()) return;
+    this.openAttachment(this.imageAttachments()[this.previewIndex + 1]);
+  }
+
+  previewPositionLabel(): string {
+    const total = this.imageAttachments().length;
+    return this.previewIndex >= 0 ? `${this.previewIndex + 1} di ${total}` : '';
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  navigatePreviewWithKeyboard(event: KeyboardEvent): void {
+    if (!this.previewVisible) return;
+    if (event.key === 'ArrowLeft' && this.canShowPrevious()) {
+      event.preventDefault();
+      this.showPrevious();
+    } else if (event.key === 'ArrowRight' && this.canShowNext()) {
+      event.preventDefault();
+      this.showNext();
+    }
   }
 
   download(attachment: IssueAttachment): void {
@@ -272,9 +500,77 @@ export class IssueDetailDialogComponent {
     URL.revokeObjectURL(url);
   }
 
-  private revokePreviewUrl(): void {
-    if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
-    this.previewUrl = null;
+  private syncAttachmentPreviews(attachments: IssueAttachment[]): void {
+    const activeIds = new Set(attachments.map(attachment => attachment.id));
+    if (this.previewAttachment && !activeIds.has(this.previewAttachment.id)) this.closePreview();
+    for (const [attachmentId, url] of this.attachmentPreviewUrls) {
+      if (activeIds.has(attachmentId)) continue;
+      URL.revokeObjectURL(url);
+      this.attachmentPreviewUrls.delete(attachmentId);
+      this.attachmentBlobs.delete(attachmentId);
+    }
+    for (const attachment of attachments.filter(item => this.isImage(item))) {
+      this.loadAttachmentPreview(attachment);
+    }
+  }
+
+  private loadAttachmentPreview(attachment: IssueAttachment): void {
+    if (this.attachmentPreviewUrls.has(attachment.id) || this.loadingAttachmentIds.has(attachment.id)) return;
+    this.loadingAttachmentIds.add(attachment.id);
+    this.issuesApi.downloadAttachment(attachment.id).subscribe({
+      next: blob => {
+        this.loadingAttachmentIds.delete(attachment.id);
+        if (this.destroyed || !this.detail?.attachments.some(item => item.id === attachment.id)) return;
+        const url = URL.createObjectURL(blob);
+        this.attachmentBlobs.set(attachment.id, blob);
+        this.attachmentPreviewUrls.set(attachment.id, url);
+        if (this.previewAttachment?.id === attachment.id) {
+          this.previewBlob = blob;
+          this.previewUrl = url;
+          this.previewLoading = false;
+        }
+      },
+      error: () => {
+        this.loadingAttachmentIds.delete(attachment.id);
+        if (this.destroyed) return;
+        if (this.previewAttachment?.id === attachment.id) {
+          this.previewLoading = false;
+          this.error = 'Non riesco ad aprire l’anteprima allegato.';
+        }
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    this.loadSequence++;
+    for (const url of this.attachmentPreviewUrls.values()) URL.revokeObjectURL(url);
+    this.attachmentPreviewUrls.clear();
+    this.attachmentBlobs.clear();
+  }
+
+  private teamValues(): IssueFieldValueInput[] {
+    return this.teamFields
+      .filter(field => field.type !== 'ATTACHMENTS')
+      .flatMap(field => {
+        const rawValue = this.teamFormModel.values[field.id];
+        const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+        return values
+          .map(value => (value ?? '').trim())
+          .filter(value => value.length > 0)
+          .map((value, position) => ({ definitionId: field.id, position, value }));
+      });
+  }
+
+  private groupOptions(options: IssueFieldOption[]): Map<number, IssueFieldOption[]> {
+    const output = new Map<number, IssueFieldOption[]>();
+    for (const option of options.filter(item => item.active)) {
+      output.set(option.definitionId, [...(output.get(option.definitionId) ?? []), option]);
+    }
+    for (const [fieldId, fieldOptions] of output.entries()) {
+      output.set(fieldId, fieldOptions.sort((a, b) => a.label.localeCompare(b.label, 'it')));
+    }
+    return output;
   }
 
   fileSize(bytes: number): string {

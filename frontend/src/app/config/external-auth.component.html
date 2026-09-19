@@ -1,0 +1,121 @@
+<p-card>
+  <div class="heading">
+    <div>
+      <h2>Autenticazione esterna</h2>
+      <p>Configura le applicazioni che possono accedere al progetto con un JWT.</p>
+    </div>
+    <div class="heading-actions">
+      <p-select inputId="external-auth-project" [options]="projects" optionLabel="name" optionValue="id"
+              [ngModel]="projectId" (ngModelChange)="selectProject($event)"
+              placeholder="Seleziona progetto" [filter]="true" filterBy="name"
+              [disabled]="loading || saving || projects.length === 0">
+        <ng-template #selectedItem let-project>
+          @if (project?.logoUrl) { <img class="project-option-logo" [src]="project.logoUrl" [alt]="project.name" /> }
+          @else { {{ project?.name }} }
+        </ng-template>
+        <ng-template #item let-project>
+          @if (project.logoUrl) { <img class="project-option-logo" [src]="project.logoUrl" [alt]="project.name" /> }
+          @else { {{ project.name }} }
+        </ng-template>
+      </p-select>
+      <p-button label="Nuova applicazione" icon="pi pi-plus" [disabled]="saving"
+                  (onClick)="openCreate()" />
+    </div>
+  </div>
+
+  @if (error) { <p class="error" role="alert">{{ error }}</p> }
+  @if (!loading && projects.length === 0) { <p>Nessun progetto disponibile.</p> }
+
+  @if (config; as current) {
+    <label class="switch-row">
+      <input type="checkbox" [ngModel]="current.enabled" (ngModelChange)="setEnabled($event)" [disabled]="saving" />
+      <span>Abilita autenticazione esterna per questo progetto</span>
+    </label>
+    <app-entity-table [rows]="current.secrets" [columns]="columns" [loading]="loading"
+                      emptyMessage="Nessuna applicazione configurata." actionLabel="Modifica"
+                      actionIcon="pi pi-pencil" secondaryActionLabel="Elimina"
+                      (refresh)="loadProject()" (rowOpen)="openApplication($event)"
+                      (secondaryRowAction)="confirmDelete($event)" />
+  }
+</p-card>
+
+<p-dialog [header]="selectedApplication ? 'Applicazione: ' + selectedApplication.name : 'Nuova applicazione'"
+          [(visible)]="applicationVisible" [modal]="true" [style]="{ width: '760px', maxWidth: '96vw' }"
+          [draggable]="false" [resizable]="false" [closable]="!saving" [closeOnEscape]="!saving">
+  <form #applicationForm="ngForm" (ngSubmit)="saveApplication()" class="application-form">
+    <label>
+      <span>Nome applicazione *</span>
+      <input pInputText name="name" [(ngModel)]="draft.name" maxlength="64" required />
+    </label>
+    <div class="form-grid">
+      <label>
+        <span>Algoritmo *</span>
+        <p-select name="algorithm" [options]="algorithms" [(ngModel)]="draft.algorithm" />
+      </label>
+      <label>
+        <span>Secret in Base64? *</span>
+        <p-select name="secretBase64" [options]="encodingOptions" optionLabel="label"
+                  optionValue="value" [(ngModel)]="draft.secretBase64" />
+      </label>
+    </div>
+    <label>
+      <span>{{ selectedApplication ? 'Nuovo secret (vuoto per mantenerlo)' : 'Secret *' }}</span>
+      <input pInputText name="secret" type="password" [(ngModel)]="draft.secret"
+             maxlength="700" [required]="!selectedApplication" autocomplete="new-password" />
+    </label>
+    <p class="muted">Se Base64 è selezionato, il secret viene decodificato prima di verificare la firma.
+      La chiave risultante deve essere lunga almeno 32, 48 o 64 byte per HS256, HS384 o HS512.</p>
+    @if (formError) { <p class="error" role="alert">{{ formError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Chiudi" severity="secondary" [outlined]="true" type="button"
+                [disabled]="saving" (onClick)="applicationVisible = false" />
+      <p-button [label]="selectedApplication ? 'Salva modifiche' : 'Crea applicazione'"
+                icon="pi pi-check" type="submit" [loading]="saving"
+                [disabled]="applicationForm.invalid || !draft.name.trim() || (!selectedApplication && !draft.secret) || saving" />
+    </div>
+  </form>
+
+  @if (selectedApplication; as application) {
+    <section class="mappings">
+      <h3>Utenti associati ({{ application.userCount }})</h3>
+      @for (mapping of application.mappings; track mapping.id) {
+        <div class="mapping-row">
+          <span><code>{{ mapping.subject }}</code> → <strong>{{ mapping.username }}</strong></span>
+          <p-button icon="pi pi-trash" size="small" severity="danger" [text]="true"
+                    ariaLabel="Elimina associazione" [disabled]="saving"
+                    (onClick)="deleteMapping(mapping.id)" />
+        </div>
+      } @empty {
+        <p class="muted">Nessun utente associato: il token di questa applicazione non può ancora consentire l’accesso.</p>
+      }
+      <div class="add-mapping">
+        <label>
+          <span>sub JWT</span>
+          <input pInputText [(ngModel)]="subject" maxlength="255" placeholder="Identificativo esterno" />
+        </label>
+        <label>
+          <span>Utente</span>
+          <p-select [options]="users" optionLabel="username" optionValue="id" [(ngModel)]="userId"
+                    placeholder="Seleziona utente" [filter]="true" filterBy="username" appendTo="body" />
+        </label>
+        <p-button label="Aggiungi utente" icon="pi pi-plus"
+                  [disabled]="saving || !subject.trim() || userId === null" (onClick)="addMapping()" />
+      </div>
+    </section>
+  }
+</p-dialog>
+
+<p-dialog header="Elimina applicazione" [(visible)]="deleteVisible" [modal]="true"
+          [style]="{ width: '440px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false"
+          [closable]="!saving" [closeOnEscape]="!saving">
+  @if (applicationToDelete; as application) {
+    <p>Vuoi eliminare <strong>{{ application.name }}</strong> e tutte le associazioni ai suoi utenti?</p>
+    @if (deleteError) { <p class="error" role="alert">{{ deleteError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" [disabled]="saving"
+                (onClick)="deleteVisible = false" />
+      <p-button label="Elimina applicazione" icon="pi pi-trash" severity="danger"
+                [loading]="saving" (onClick)="deleteApplication()" />
+    </div>
+  }
+</p-dialog>

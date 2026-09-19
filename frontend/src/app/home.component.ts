@@ -3,12 +3,12 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
+import { DatePickerModule } from 'primeng/datepicker';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { forkJoin } from 'rxjs';
-import { AuthService } from './auth.service';
 import {
   ISSUE_STATUSES,
   IssueStatus,
@@ -20,7 +20,10 @@ import {
 } from './issues.service';
 import { IssueCreateDialogComponent } from './issue-create-dialog.component';
 import { IssueDetailDialogComponent } from './issue-detail-dialog.component';
+import { IssueReportDialogComponent } from './issue-report-dialog.component';
 import { ProjectContextService } from './project-context.service';
+import { LiveSyncService } from './live-sync.service';
+import { filterIssues } from './issue-filters';
 
 interface SelectOption<T> {
   label: string;
@@ -29,7 +32,7 @@ interface SelectOption<T> {
 
 @Component({
   selector: 'app-home',
-  imports: [ButtonModule, CardModule, DatePipe, FormsModule, InputTextModule, IssueCreateDialogComponent, IssueDetailDialogComponent, SelectModule, TableModule, TagModule],
+  imports: [ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, IssueCreateDialogComponent, IssueDetailDialogComponent, IssueReportDialogComponent, SelectModule, TableModule, TagModule],
   template: `
     <p-card styleClass="dashboard-card">
       <div class="page-title">
@@ -42,6 +45,8 @@ interface SelectOption<T> {
           }
         </div>
         <div class="page-actions">
+          <p-button label="Report PDF" icon="pi pi-file-pdf" severity="primary" [outlined]="true"
+                    [disabled]="!projects.currentProjectId()" (onClick)="reportDialogVisible = true" />
           <p-button label="Nuova segnalazione" icon="pi pi-plus" [disabled]="!projects.currentProjectId()"
                     (onClick)="openCreateDialog()" />
           <p-button label="Aggiorna" icon="pi pi-refresh" severity="secondary" [outlined]="true"
@@ -70,13 +75,11 @@ interface SelectOption<T> {
             <p-select [options]="issuerOptions()" [(ngModel)]="issuerFilter" optionLabel="label" optionValue="value"
                       appendTo="body" />
           </label>
-          <label>
-            <span>Da</span>
-            <input pInputText type="date" [(ngModel)]="fromDate" />
-          </label>
-          <label>
-            <span>A</span>
-            <input pInputText type="date" [(ngModel)]="toDate" />
+          <label class="date-range-filter">
+            <span>Periodo</span>
+            <p-datepicker [(ngModel)]="dateRange" selectionMode="range" dateFormat="dd/mm/yy"
+                          [showIcon]="true" [showButtonBar]="true" appendTo="body"
+                          placeholder="Seleziona intervallo" />
           </label>
           <p-button label="Pulisci" icon="pi pi-filter-slash" severity="secondary" [outlined]="true" (onClick)="resetFilters()" />
         </section>
@@ -99,7 +102,7 @@ interface SelectOption<T> {
             </tr>
           </ng-template>
           <ng-template pTemplate="body" let-issue>
-            <tr class="clickable-row" (click)="openDetail(issue)">
+            <tr class="clickable-row" [class.internal-issue]="issue.internal" (click)="openDetail(issue)">
               <td class="id-cell">#{{ issue.id }}</td>
               <td>{{ issue.title }}</td>
               <td><p-tag [value]="statusLabel(issue.status)" [severity]="statusSeverity(issue.status)" /></td>
@@ -122,6 +125,10 @@ interface SelectOption<T> {
         <app-issue-detail-dialog [issueId]="selectedIssueId" (issueChanged)="onIssueChanged($event)" (issueDeleted)="onIssueDeleted($event)"
                                  (closed)="selectedIssueId = null" />
       }
+      @if (reportDialogVisible) {
+        <app-issue-report-dialog [projectId]="projects.currentProjectId()" [users]="users()"
+                                 (closed)="reportDialogVisible = false" />
+      }
     </p-card>
   `,
   styleUrl: './home.component.css'
@@ -129,21 +136,21 @@ interface SelectOption<T> {
 export class HomeComponent {
   readonly projects = inject(ProjectContextService);
   private readonly issuesApi = inject(IssuesService);
-  private readonly auth = inject(AuthService);
+  private readonly eventSync = inject(LiveSyncService);
 
   readonly issues = signal<IssueSummary[]>([]);
   readonly users = signal<ProjectUserSummary[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   createDialogVisible = false;
+  reportDialogVisible = false;
   selectedIssueId: number | null = null;
 
   textFilter = '';
   statusFilter: IssueStatus | 'ALL' = 'ALL';
   typeFilter: IssueSummary['issueType'] | 'ALL' | 'NONE' = 'ALL';
   issuerFilter: number | 'ALL' | 'NONE' = 'ALL';
-  fromDate = '';
-  toDate = '';
+  dateRange: Date[] | null = null;
 
   readonly statusOptions: SelectOption<IssueStatus | 'ALL'>[] = [
     { label: 'Tutti', value: 'ALL' },
@@ -164,32 +171,29 @@ export class HomeComponent {
   ]);
 
   filteredIssues(): IssueSummary[] {
-    const text = this.textFilter.trim().toLowerCase();
-    const from = this.fromDate ? new Date(`${this.fromDate}T00:00:00`).getTime() : null;
-    const to = this.toDate ? new Date(`${this.toDate}T23:59:59`).getTime() : null;
-    return this.issues().filter(issue => {
-      if (this.statusFilter !== 'ALL' && issue.status !== this.statusFilter) return false;
-      if (this.typeFilter === 'NONE' && issue.issueType !== null) return false;
-      if (this.typeFilter !== 'ALL' && this.typeFilter !== 'NONE' && issue.issueType !== this.typeFilter) return false;
-      if (this.issuerFilter === 'NONE' && issue.issuerUserId !== null) return false;
-      if (typeof this.issuerFilter === 'number' && issue.issuerUserId !== this.issuerFilter) return false;
-      const created = new Date(issue.createdAt).getTime();
-      if (from !== null && created < from) return false;
-      if (to !== null && created > to) return false;
-      if (!text) return true;
-      return [issue.id.toString(), issue.title, issue.issuerUsername ?? '', STATUS_LABELS[issue.status], this.typeLabel(issue.issueType)]
-        .some(value => value.toLowerCase().includes(text));
+    return filterIssues(this.issues(), {
+      text: this.textFilter,
+      status: this.statusFilter,
+      type: this.typeFilter,
+      issuerId: this.issuerFilter,
+      from: this.dateRange?.[0] ?? null,
+      to: this.dateRange?.[1] ?? null
     });
   }
 
   private lastProjectId: number | null = null;
+  private lastRevision = -1;
+  private loadSequence = 0;
 
   constructor() {
     effect(() => {
       const projectId = this.projects.currentProjectId();
-      if (projectId === this.lastProjectId) return;
+      const revision = this.eventSync.revision();
+      if (projectId === this.lastProjectId && revision === this.lastRevision) return;
+      const projectChanged = projectId !== this.lastProjectId;
       this.lastProjectId = projectId;
-      this.resetForProject();
+      this.lastRevision = revision;
+      if (projectChanged) this.resetForProject();
       if (projectId) this.load();
     });
   }
@@ -197,16 +201,18 @@ export class HomeComponent {
   load(): void {
     const projectId = this.projects.currentProjectId();
     if (!projectId) return;
+    const sequence = ++this.loadSequence;
     this.loading.set(true);
     this.error.set(null);
     forkJoin({ issues: this.issuesApi.issues(projectId), users: this.issuesApi.projectUsers(projectId) }).subscribe({
       next: ({ issues, users }) => {
+        if (sequence !== this.loadSequence || projectId !== this.projects.currentProjectId()) return;
         this.issues.set(issues);
         this.users.set(users);
-        this.applyDefaultIssuerFilter();
         this.loading.set(false);
       },
       error: () => {
+        if (sequence !== this.loadSequence || projectId !== this.projects.currentProjectId()) return;
         this.error.set('Non riesco a caricare le segnalazioni.');
         this.loading.set(false);
       }
@@ -238,9 +244,7 @@ export class HomeComponent {
     this.statusFilter = 'ALL';
     this.typeFilter = 'ALL';
     this.issuerFilter = 'ALL';
-    this.fromDate = '';
-    this.toDate = '';
-    this.applyDefaultIssuerFilter();
+    this.dateRange = null;
   }
 
   statusLabel(status: IssueStatus): string { return STATUS_LABELS[status]; }
@@ -258,19 +262,15 @@ export class HomeComponent {
   }
 
   private resetForProject(): void {
+    this.loadSequence++;
     this.issues.set([]);
     this.users.set([]);
     this.error.set(null);
     this.resetFilters();
   }
 
-  private applyDefaultIssuerFilter(): void {
-    const user = this.auth.user();
-    if (user?.role === 'USER') this.issuerFilter = user.id;
-  }
-
   private userLabel(user: ProjectUserSummary): string {
     const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
-    return fullName ? `${user.username} · ${fullName}` : user.username;
+    return fullName ? fullName : user.username;
   }
 }

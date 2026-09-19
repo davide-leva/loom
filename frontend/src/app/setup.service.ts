@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 export interface SetupStatus { required: boolean; }
 export interface SetupInput {
   teamCompanyName: string;
+  primaryColor: string;
   username: string;
   email: string;
   password: string;
@@ -16,5 +17,10 @@ export interface SetupInput {
 export class SetupService {
   private readonly http = inject(HttpClient);
   status(): Observable<SetupStatus> { return this.http.get<SetupStatus>('/api/setup/status'); }
-  setup(input: SetupInput): Observable<void> { return this.http.post<void>('/api/setup', input); }
+  setup(input: SetupInput, logo: File | null): Observable<void> {
+    const form = new FormData();
+    form.append('input', new Blob([JSON.stringify(input)], { type: 'application/json' }));
+    if (logo) form.append('logo', logo);
+    return this.http.post<void>('/api/setup', form);
+  }
 }

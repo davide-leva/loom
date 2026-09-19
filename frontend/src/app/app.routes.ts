@@ -26,6 +26,9 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
       { path: 'dashboard', loadComponent: () => import('./home.component').then(module => module.HomeComponent) },
+      { path: 'eventi', loadComponent: () => import('./events.component').then(module => module.EventsComponent),
+        canActivate: [() => ['ADMIN', 'TEAM'].includes(inject(AuthService).user()?.role ?? '')
+          ? true : inject(Router).createUrlTree(['/dashboard'])] },
       { path: 'preferenze-email', loadComponent: () => import('./email-preferences.component').then(module => module.EmailPreferencesComponent) },
       { path: 'anomalie', loadComponent: () => import('./issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Anomalie', issueType: 'ANOMALY' } },
       { path: 'migliorie', loadComponent: () => import('./issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Migliorie', issueType: 'IMPROVEMENT' } },
@@ -60,6 +63,11 @@ export const routes: Routes = [
             path: 'campi-ticket',
             loadComponent: () => import('./config/ticket-fields.component')
               .then(module => module.TicketFieldsComponent)
+          },
+          {
+            path: 'autenticazione-esterna',
+            loadComponent: () => import('./config/external-auth.component')
+              .then(module => module.ExternalAuthComponent)
           }
         ]
       }

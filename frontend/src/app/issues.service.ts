@@ -1,7 +1,8 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 import { AuthService } from './auth.service';
+import { IssueNotificationsService } from './issue-notifications.service';
 
 export type IssueStatus = 'REPORTED' | 'IN_PROGRESS' | 'COMPLETED' | 'RELEASED' | 'APPROVED';
 export type IssueType = 'ANOMALY' | 'IMPROVEMENT' | 'IMPLEMENTATION';
@@ -101,6 +102,7 @@ export interface CreateIssueInput {
   title: string;
   description: string;
   values: IssueFieldValueInput[];
+  internal: boolean;
 }
 
 export interface ProjectUserSummary {
@@ -111,20 +113,45 @@ export interface ProjectUserSummary {
   role: UserRole;
 }
 
+export interface IssueReportFilters {
+  search?: string;
+  status?: IssueStatus;
+  issueType?: IssueType;
+  uncategorized?: boolean;
+  issuerId?: number;
+  issuerUnassigned?: boolean;
+  developerId?: number;
+  developerUnassigned?: boolean;
+  internal?: boolean;
+  from?: string;
+  to?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class IssuesService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
+  private readonly notifications = inject(IssueNotificationsService);
 
   issueDetail(issueId: number): Observable<IssueDetail> {
     return this.http.get<IssueDetail>(`/api/work/issues/${issueId}`, {
       headers: this.auth.authHeaders()
-    });
+    }).pipe(tap(() => this.notifications.markSeen(issueId)));
   }
 
   issues(projectId: number): Observable<IssueSummary[]> {
     return this.http.get<IssueSummary[]>(`/api/work/projects/${projectId}/issues`, {
       headers: this.auth.authHeaders()
+    });
+  }
+
+  downloadIssueReport(projectId: number, filters: IssueReportFilters): Observable<Blob> {
+    let params = new HttpParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') params = params.set(key, String(value));
+    });
+    return this.http.get(`/api/work/projects/${projectId}/issues/report`, {
+      headers: this.auth.authHeaders(), params, responseType: 'blob'
     });
   }
 
@@ -148,6 +175,12 @@ export class IssuesService {
 
   createIssue(input: CreateIssueInput): Observable<IssueSummary> {
     return this.http.post<IssueSummary>('/api/work/issues', input, {
+      headers: this.auth.authHeaders()
+    });
+  }
+
+  updateIssueValues(issueId: number, values: IssueFieldValueInput[]): Observable<IssueDetail> {
+    return this.http.patch<IssueDetail>(`/api/work/issues/${issueId}/values`, { values }, {
       headers: this.auth.authHeaders()
     });
   }

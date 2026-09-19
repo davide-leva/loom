@@ -48,11 +48,11 @@
         </div>
         <div class="form-field">
           <label for="team-user-password">
-            {{ editingUser ? 'Nuova password (lascia vuoto per mantenerla)' : 'Password * (almeno 12 caratteri)' }}
+            {{ editingUser ? 'Nuova password (lascia vuoto per mantenerla)' : 'Password * (almeno 8 caratteri)' }}
           </label>
           <p-password inputId="team-user-password" name="password" [(ngModel)]="draft.password"
                       [feedback]="false" [toggleMask]="true" [style]="{ width: '100%' }"
-                      [inputStyle]="{ width: '100%' }" [required]="!editingUser" minlength="12" />
+                      [inputStyle]="{ width: '100%' }" [required]="!editingUser" minlength="8" />
         </div>
       </div>
 
@@ -62,7 +62,7 @@
                   [disabled]="saving" (onClick)="formVisible = false" />
         <p-button [label]="editingUser ? 'Salva modifiche' : 'Crea utente'" icon="pi pi-check"
                   type="submit" [loading]="saving"
-                  [disabled]="userForm.invalid || !draft.username.trim() || !draft.email.trim() || (!editingUser && draft.password.length < 12) || (draft.password.length > 0 && draft.password.length < 12) || saving" />
+                  [disabled]="userForm.invalid || !draft.username.trim() || !draft.email.trim() || (!editingUser && draft.password.length < 8) || (draft.password.length > 0 && draft.password.length < 8) || saving" />
       </div>
     </form>
   }

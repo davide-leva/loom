@@ -20,7 +20,7 @@ import { ProjectContextService } from './project-context.service';
       <p>Questa sezione sarà disponibile a breve.</p>
     </p-card>
   `,
-  styles: [`h1 { margin-top: 0; color: #0f477e; font-size: 24px; }`]
+  styles: [`h1 { margin-top: 0; color: var(--p-primary-700); font-size: 24px; }`]
 })
 export class SectionPageComponent {
   readonly route = inject(ActivatedRoute);

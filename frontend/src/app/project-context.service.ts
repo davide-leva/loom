@@ -50,6 +50,10 @@ export class ProjectContextService {
     this.writeCookie(id);
   }
 
+  rememberExternalProject(id: number): void {
+    this.writeCookie(id);
+  }
+
   currentProject(): ProjectSummary | null {
     return this.projects().find(project => project.id === this.currentProjectId()) ?? null;
   }

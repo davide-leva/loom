@@ -1,19 +1,18 @@
 import { definePreset } from '@primeng/themes';
 import Aura from '@primeng/themes/aura';
 
-// Riprende il preset Aura e la palette blu del login di movex-web.
 export const theme = definePreset(Aura, {
   semantic: {
+    primary: {
+      50: '{blue.50}', 100: '{blue.100}', 200: '{blue.200}',
+      300: '{blue.300}', 400: '{blue.400}', 500: '{blue.500}',
+      600: '{blue.600}', 700: '{blue.700}', 800: '{blue.800}',
+      900: '{blue.900}', 950: '{blue.950}'
+    },
     colorScheme: {
       light: {
         surface: { 200: '#f8f8f8' },
-        card: { color: '#ffffff' },
-        primary: {
-          50: '#eef5fc', 100: '#d1e4f6', 200: '#a3c8ed',
-          300: '#75ade4', 400: '#4791db', 500: '#1976d2',
-          600: '#145ea8', 700: '#0f477e', 800: '#0a2f54',
-          900: '#05182a'
-        }
+        card: { color: '#ffffff' }
       }
     }
   }
