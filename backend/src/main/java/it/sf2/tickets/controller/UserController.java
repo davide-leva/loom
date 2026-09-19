@@ -47,7 +47,7 @@ public class UserController {
         Long companyId,
         @NotBlank @Size(max = 64) String username,
         @NotBlank @Email @Size(max = 128) String email,
-        @Size(min = 12) String password,
+        @Size(min = 8) String password,
         Boolean wantEmail
     ) {}
 

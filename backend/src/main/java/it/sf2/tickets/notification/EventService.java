@@ -8,6 +8,7 @@ import it.sf2.tickets.domain.Project;
 import it.sf2.tickets.domain.ProjectUserId;
 import it.sf2.tickets.domain.Role;
 import it.sf2.tickets.domain.User;
+import it.sf2.tickets.live.LiveUpdateHub;
 import it.sf2.tickets.repository.EventRepository;
 import it.sf2.tickets.repository.EventUserNotificationRepository;
 import it.sf2.tickets.repository.ProjectUserRepository;
@@ -15,25 +16,52 @@ import it.sf2.tickets.repository.UserRepository;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class EventService {
     private final EventRepository events;
     private final EventUserNotificationRepository notifications;
     private final ProjectUserRepository memberships;
     private final UserRepository users;
+    private final LiveUpdateHub liveUpdates;
 
     @Transactional
     public void issueEvent(EventType type, Issue issue, User actor, String message) {
-        Event event = events.save(new Event(type, message, issue.getProject(), issue, actor));
-        recipients(issue).values().stream()
+        Event event = new Event(type, message, issue.getProject(), type == EventType.ISSUE_DELETED ? null : issue, actor);
+        event.setIssueRefId(issue.getId());
+        event.setInternal(issue.isInternal());
+        events.save(event);
+        long notificationsCreated = recipients(issue).values().stream()
             .filter(user -> actor == null || !user.getId().equals(actor.getId()))
+            .filter(user -> !issue.isInternal() || user.getRole() == Role.ADMIN || user.getRole() == Role.TEAM)
             .filter(user -> wantsEmail(user, issue.getProject()))
             .map(user -> new EventUserNotification(event, user))
-            .forEach(notifications::save);
+            .peek(notifications::save)
+            .count();
+        log.info("Event recorded: id={} type={} project={} issue={} actor={} internal={} notifications={}",
+            event.getId(), type, issue.getProject().getId(), issue.getId(), actor == null ? null : actor.getId(),
+            issue.isInternal(), notificationsCreated);
+        Long projectId = issue.getProject().getId();
+        Long issueId = issue.getId();
+        boolean internal = issue.isInternal();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                liveUpdates.changed(projectId, issueId, internal);
+            }
+        });
+    }
+
+    @Transactional
+    public void detachIssue(Long issueId) {
+        events.detachIssue(issueId);
     }
 
     private Map<Long, User> recipients(Issue issue) {

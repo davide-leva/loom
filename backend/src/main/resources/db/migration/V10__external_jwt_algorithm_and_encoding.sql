@@ -1,0 +1,2 @@
+ALTER TABLE external_jwt_secrets ADD COLUMN algorithm VARCHAR(5) NOT NULL DEFAULT 'HS256';
+ALTER TABLE external_jwt_secrets ADD COLUMN secret_base64 BOOLEAN NOT NULL DEFAULT FALSE;

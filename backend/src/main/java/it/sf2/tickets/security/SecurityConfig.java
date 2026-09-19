@@ -34,8 +34,11 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(requests -> requests
-                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/setup").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/external-login", "/api/setup").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/setup/status").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/branding/internal", "/api/branding/companies/*/logo",
+                    "/api/branding/projects/*/logo").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/work/live").permitAll()
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))
             .build();

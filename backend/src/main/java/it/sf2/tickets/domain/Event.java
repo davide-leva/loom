@@ -49,6 +49,12 @@ public class Event {
     @JoinColumn(name = "issue_id")
     private Issue issue;
 
+    @Column(name = "issue_ref_id")
+    private Long issueRefId;
+
+    @Column(nullable = false)
+    private boolean internal;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "actor_id")
     private User actor;
@@ -58,6 +64,8 @@ public class Event {
         this.data = data;
         this.project = project;
         this.issue = issue;
+        this.issueRefId = issue == null ? null : issue.getId();
+        this.internal = issue != null && issue.isInternal();
         this.actor = actor;
     }
 }

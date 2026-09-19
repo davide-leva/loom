@@ -1,9 +1,11 @@
 package it.sf2.tickets.auth;
 
 import it.sf2.tickets.domain.Project;
+import it.sf2.tickets.domain.Company;
 import it.sf2.tickets.domain.Role;
 import it.sf2.tickets.domain.User;
 import it.sf2.tickets.repository.ProjectRepository;
+import it.sf2.tickets.repository.CompanyRepository;
 import it.sf2.tickets.repository.ProjectUserRepository;
 import it.sf2.tickets.repository.UserRepository;
 import jakarta.validation.Valid;
@@ -12,6 +14,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -25,45 +28,82 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/auth")
+@Slf4j
 public class AuthController {
     private final AuthService auth;
     private final UserRepository users;
     private final ProjectRepository projects;
     private final ProjectUserRepository memberships;
+    private final CompanyRepository companies;
+    private final ExternalAuthService externalAuth;
 
     public AuthController(AuthService auth, UserRepository users, ProjectRepository projects,
-                          ProjectUserRepository memberships) {
+                          ProjectUserRepository memberships, CompanyRepository companies, ExternalAuthService externalAuth) {
         this.auth = auth;
         this.users = users;
         this.projects = projects;
         this.memberships = memberships;
+        this.companies = companies;
+        this.externalAuth = externalAuth;
     }
 
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        return auth.login(request);
+        LoginResponse response = auth.login(request);
+        log.info("Login succeeded: username={}", request.username());
+        return response;
+    }
+
+    public record ExternalLoginRequest(String token) {}
+
+    @PostMapping("/external-login")
+    public ExternalAuthService.ExternalLoginResponse externalLogin(@RequestBody ExternalLoginRequest request) {
+        ExternalAuthService.ExternalLoginResponse response = externalAuth.login(request.token());
+        log.info("External login succeeded: project={}", response.projectId());
+        return response;
     }
 
     @GetMapping("/me")
     @Transactional(readOnly = true)
     public MeResponse me(JwtAuthenticationToken authentication) {
         User user = currentUser(authentication);
+        log.debug("Current user loaded: user={}", user.getId());
+        Company company = user.getCompany();
+        Company internal = companies.findFirstByTeamCompanyTrue().orElse(null);
+        String displayName = "%s %s".formatted(user.getLastName(), user.getFirstName());
+
         return new MeResponse(
-            user.getId(), user.getUsername(), user.getEmail(), user.getRole().name(),
-            user.getCompany() == null ? null : user.getCompany().getName()
+            user.getId(), user.getUsername(), displayName, user.getEmail(), user.getRole().name(),
+            company == null ? null : company.getName(),
+            company == null ? null : company.getId(),
+            company == null ? "blue" : company.getPrimaryColor(),
+            company == null || company.getLogoExtension() == null ? null
+                : "/api/branding/companies/" + company.getId() + "/logo",
+            internal == null ? null : internal.getName(),
+            internal == null || internal.getLogoExtension() == null ? null
+                : "/api/branding/companies/" + internal.getId() + "/logo"
         );
     }
 
-    public record ProjectSummary(Long id, String name) {}
+    public record ProjectSummary(Long id, String name, String logoUrl) {}
 
     @GetMapping("/projects")
     @Transactional(readOnly = true)
     public List<ProjectSummary> projects(JwtAuthenticationToken authentication) {
         User user = currentUser(authentication);
+        log.debug("Projects listed for user={}", user.getId());
         List<Project> available = user.getRole() == Role.ADMIN
             ? projects.findAll(Sort.by("name", "id"))
             : visibleProjects(user);
-        return available.stream().map(project -> new ProjectSummary(project.getId(), project.getName())).toList();
+        Number externalProjectId = authentication.getToken().getClaim("external_project_id");
+        if (externalProjectId != null) {
+            available = available.stream()
+                .filter(project -> project.getId() == externalProjectId.longValue())
+                .toList();
+        }
+        return available.stream().map(project -> new ProjectSummary(project.getId(), project.getName(),
+            project.getLogoExtension() == null ? null
+                : "/api/branding/projects/" + project.getId() + "/logo")).toList();
     }
 
     private List<Project> visibleProjects(User user) {

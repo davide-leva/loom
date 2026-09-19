@@ -1,6 +1,8 @@
 package it.sf2.tickets.notification;
 
+import it.sf2.tickets.controller.BrandingService;
 import it.sf2.tickets.domain.EventUserNotification;
+import it.sf2.tickets.repository.CompanyRepository;
 import it.sf2.tickets.repository.EventUserNotificationRepository;
 import jakarta.mail.MessagingException;
 import java.io.File;
@@ -25,12 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class EmailNotificationScheduler {
     private final EventUserNotificationRepository notifications;
     private final JavaMailSender mailSender;
+    private final CompanyRepository companies;
+    private final BrandingService branding;
 
     @Value("${app.notifications.email.from}")
     private String from;
-
-    @Value("${app.notifications.email.logo-path}")
-    private String logoPath;
 
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
@@ -58,13 +59,17 @@ public class EmailNotificationScheduler {
         try {
             var message = mailSender.createMimeMessage();
             var helper = new MimeMessageHelper(message, true, "UTF-8");
+            var internal = companies.findFirstByTeamCompanyTrue().orElse(null);
+            String brandName = internal == null ? "Tickets" : internal.getName();
+            var storedLogo = internal == null ? null
+                : branding.logoPath("companies", internal.getId(), internal.getLogoExtension());
+            File logo = storedLogo == null ? null : storedLogo.toFile();
             helper.setFrom(from);
             helper.setTo(notification.getUser().getEmail());
-            helper.setSubject("SF2 Tickets · " + titleFor(notification.getEvent().getType()));
-            helper.setText(htmlBody(notification), true);
-            File logo = new File(logoPath);
-            if (logo.exists() && logo.isFile()) {
-                helper.addInline("softwaredue-logo", new FileSystemResource(logo));
+            helper.setSubject(brandName + " · " + titleFor(notification.getEvent().getType()));
+            helper.setText(htmlBody(notification, brandName, logo != null && logo.isFile()), true);
+            if (logo != null && logo.isFile()) {
+                helper.addInline("internal-logo", new FileSystemResource(logo));
             }
             mailSender.send(message);
             markNotified(notification);
@@ -83,19 +88,22 @@ public class EmailNotificationScheduler {
         notification.setNotifiedAt(Instant.now());
     }
 
-    private static String htmlBody(EventUserNotification notification) {
+    private static String htmlBody(EventUserNotification notification, String brandName, boolean hasLogo) {
         var event = notification.getEvent();
         String title = titleFor(event.getType());
         String explanation = explanationFor(event.getType(), event.getData());
         String issueTitle = event.getIssue() == null ? "" : event.getIssue().getTitle();
         String projectName = event.getProject() == null ? "" : event.getProject().getName();
         String issueMeta = issueMetaHtml(event.getIssue());
+        String logoMarkup = hasLogo
+            ? "<img src=\"cid:internal-logo\" alt=\"" + escape(brandName) + "\" style=\"height:46px\" />"
+            : "";
         return """
             <div style=\"font-family:Poppins,Arial,sans-serif;background:#f8fafc;padding:28px;color:#0f172a\">
               <div style=\"max-width:760px;margin:auto;background:#fff;border:1px solid #dbe7f3;border-radius:18px;overflow:hidden\">
                 <div style=\"padding:22px 26px;background:#eef5fc;display:flex;align-items:center;gap:14px\">
-                  <img src=\"cid:softwaredue-logo\" alt=\"Software Due\" style=\"height:46px\" />
-                  <div style=\"font-size:13px;color:#0f477e;font-weight:700;letter-spacing:.08em;text-transform:uppercase\">Tickets</div>
+                  %s
+                  <div style=\"font-size:13px;color:#0f477e;font-weight:700;letter-spacing:.08em;text-transform:uppercase\">%s</div>
                 </div>
                 <div style=\"padding:26px\">
                   <h1 style=\"margin:0 0 10px;color:#0f477e;font-size:24px\">%s</h1>
@@ -110,7 +118,7 @@ public class EmailNotificationScheduler {
                 </div>
               </div>
             </div>
-            """.formatted(escape(title), escape(explanation), escape(projectName),
+            """.formatted(logoMarkup, escape(brandName), escape(title), escape(explanation), escape(projectName),
             event.getIssue() == null ? "" : event.getIssue().getId(), escape(issueTitle), issueMeta, event.getEventDate());
     }
 
@@ -131,7 +139,9 @@ public class EmailNotificationScheduler {
             case ISSUE_STATUS_CHANGED -> "Stato aggiornato";
             case ISSUE_APPROVED -> "Segnalazione approvata";
             case ISSUE_COMMENT_ADDED -> "Nuovo commento";
+            case ISSUE_COMMENT_DELETED -> "Commento eliminato";
             case ISSUE_ATTACHMENT_UPLOADED -> "Nuovo allegato";
+            case ISSUE_VALUES_CHANGED -> "Campi aggiornati";
             case ISSUE_DELETED -> "Segnalazione eliminata";
         };
     }
@@ -144,7 +154,9 @@ public class EmailNotificationScheduler {
             case ISSUE_STATUS_CHANGED -> appendDetail("Lo stato della segnalazione è stato aggiornato. La modifica è già visibile nella dashboard e nella kanban del progetto.", detail);
             case ISSUE_APPROVED -> "Un superuser ha approvato la segnalazione rilasciata. La richiesta è quindi chiusa dal punto di vista del cliente.";
             case ISSUE_COMMENT_ADDED -> "È stato aggiunto un nuovo commento alla segnalazione. Apri il dettaglio issue per leggere la conversazione completa e rispondere se serve.";
+            case ISSUE_COMMENT_DELETED -> "Un commento è stato eliminato dalla segnalazione.";
             case ISSUE_ATTACHMENT_UPLOADED -> appendDetail("È stato caricato un nuovo allegato. L’allegato è disponibile nel dettaglio della segnalazione.", detail);
+            case ISSUE_VALUES_CHANGED -> "I campi della segnalazione sono stati aggiornati.";
             case ISSUE_DELETED -> "La segnalazione è stata eliminata. Questa comunicazione resta come traccia dell’operazione eseguita.";
         };
     }

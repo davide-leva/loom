@@ -51,18 +51,26 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
 
+        return issueToken(user);
+    }
+
+    public LoginResponse issueToken(User user) {
+        return issueToken(user, null);
+    }
+
+    public LoginResponse issueToken(User user, Long externalProjectId) {
         Instant now = Instant.now();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
+        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
             .issuer(issuer)
             .issuedAt(now)
             .expiresAt(now.plus(ttl))
             .subject(user.getId().toString())
             .claim("username", user.getUsername())
             .claim("email", user.getEmail())
-            .claim("role", user.getRole().name())
-            .build();
+            .claim("role", user.getRole().name());
+        if (externalProjectId != null) claims.claim("external_project_id", externalProjectId);
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-        String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+        String token = encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();
         return new LoginResponse(token, "Bearer", ttl.toSeconds());
     }
 }

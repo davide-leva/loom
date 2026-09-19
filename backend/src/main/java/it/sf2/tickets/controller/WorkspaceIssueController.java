@@ -23,6 +23,7 @@ import it.sf2.tickets.repository.IssueRepository;
 import it.sf2.tickets.repository.ProjectUserRepository;
 import it.sf2.tickets.repository.UserRepository;
 import it.sf2.tickets.notification.EventService;
+import it.sf2.tickets.notification.IssueNotificationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -36,11 +37,14 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -67,6 +71,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/work")
 @Transactional
+@Slf4j
 public class WorkspaceIssueController {
     private final IssueRepository issues;
     private final IssueAttachmentRepository attachments;
@@ -77,6 +82,8 @@ public class WorkspaceIssueController {
     private final UserRepository users;
     private final ProjectUserRepository memberships;
     private final EventService eventService;
+    private final IssueNotificationService issueNotifications;
+    private final IssueReportService issueReports;
     private final ApiLookup lookup;
     private final Path attachmentsRoot;
     private final DataSize maxAttachmentSize;
@@ -85,7 +92,8 @@ public class WorkspaceIssueController {
                                     IssueCommentRepository comments, IssueDataRepository values,
                                     IssueFieldDefinitionRepository definitions, IssueFieldOptionRepository options,
                                     UserRepository users, ProjectUserRepository memberships, EventService eventService,
-                                    ApiLookup lookup,
+                                    IssueNotificationService issueNotifications,
+                                    IssueReportService issueReports, ApiLookup lookup,
                                     @Value("${app.attachments.root-folder}") String attachmentsRootFolder,
                                     @Value("${app.attachments.max-file-size}") DataSize maxAttachmentSize) {
         this.issues = issues;
@@ -97,6 +105,8 @@ public class WorkspaceIssueController {
         this.users = users;
         this.memberships = memberships;
         this.eventService = eventService;
+        this.issueNotifications = issueNotifications;
+        this.issueReports = issueReports;
         this.lookup = lookup;
         this.attachmentsRoot = Paths.get(attachmentsRootFolder).toAbsolutePath().normalize();
         this.maxAttachmentSize = maxAttachmentSize;
@@ -133,11 +143,13 @@ public class WorkspaceIssueController {
         @NotNull Long projectId,
         @NotBlank @Size(max = 255) String title,
         @NotBlank String description,
-        List<FieldValueInput> values
+        List<FieldValueInput> values,
+        Boolean internal
     ) {}
 
     public record PlanningPatch(@NotNull IssueType issueType, Long devUserId) {}
     public record CreateComment(@NotBlank String comment) {}
+    public record ValuesPatch(List<FieldValueInput> values) {}
 
     public record FieldValueInput(@NotNull Long definitionId, Integer position, @NotBlank String value) {}
 
@@ -145,23 +157,87 @@ public class WorkspaceIssueController {
     @Transactional(readOnly = true)
     public List<IssueOutput> issuesByProject(@PathVariable Long projectId, JwtAuthenticationToken authentication) {
         Project project = lookup.project(projectId);
-        requireVisibleProject(project, currentUser(authentication));
+        User user = currentUser(authentication);
+        requireVisibleProject(project, user);
         return issues.findByProject_Id(projectId).stream()
+            .filter(issue -> canSeeIssue(issue, user))
             .map(WorkspaceIssueController::issueOutput)
             .toList();
     }
 
+    @GetMapping(value = "/projects/{projectId}/issues/report", produces = MediaType.APPLICATION_PDF_VALUE)
+    @Transactional(readOnly = true)
+    public ResponseEntity<byte[]> issueReport(
+        @PathVariable Long projectId,
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) IssueStatus status,
+        @RequestParam(required = false) IssueType issueType,
+        @RequestParam(defaultValue = "false") boolean uncategorized,
+        @RequestParam(required = false) Long issuerId,
+        @RequestParam(defaultValue = "false") boolean issuerUnassigned,
+        @RequestParam(required = false) Long developerId,
+        @RequestParam(defaultValue = "false") boolean developerUnassigned,
+        @RequestParam(required = false) Boolean internal,
+        @RequestParam(required = false) Instant from,
+        @RequestParam(required = false) Instant to,
+        JwtAuthenticationToken authentication
+    ) {
+        Project project = lookup.project(projectId);
+        User user = currentUser(authentication);
+        requireVisibleProject(project, user);
+        if (uncategorized && issueType != null
+            || issuerUnassigned && issuerId != null
+            || developerUnassigned && developerId != null
+            || from != null && to != null && !from.isBefore(to)) {
+            throw ApiLookup.badRequest("Invalid report filters");
+        }
+
+        String normalizedSearch = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        List<Issue> reportIssues = issues.findByProject_Id(projectId).stream()
+            .filter(issue -> canSeeIssue(issue, user))
+            .filter(issue -> status == null || issue.getStatus() == status)
+            .filter(issue -> issueType == null || issue.getIssueType() == issueType)
+            .filter(issue -> !uncategorized || issue.getIssueType() == null)
+            .filter(issue -> issuerId == null || issuerId.equals(id(issue.getIssuer())))
+            .filter(issue -> !issuerUnassigned || issue.getIssuer() == null)
+            .filter(issue -> developerId == null || developerId.equals(id(issue.getDeveloper())))
+            .filter(issue -> !developerUnassigned || issue.getDeveloper() == null)
+            .filter(issue -> internal == null || issue.isInternal() == internal)
+            .filter(issue -> from == null || !issue.getCreatedAt().isBefore(from))
+            .filter(issue -> to == null || issue.getCreatedAt().isBefore(to))
+            .filter(issue -> normalizedSearch.isBlank() || reportSearchText(issue).contains(normalizedSearch))
+            .sorted(Comparator.comparing(Issue::getCreatedAt).reversed()
+                .thenComparing(Comparator.comparing(Issue::getId).reversed()))
+            .toList();
+
+        List<String> activeFilters = reportFilterLabels(search, status, issueType, uncategorized, issuerId,
+            issuerUnassigned, developerId, developerUnassigned, internal, from, to);
+        byte[] pdf = issueReports.generate(project.getName(), reportIssues, activeFilters);
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"report-segnalazioni-" + projectId + ".pdf\"")
+            .body(pdf);
+    }
+
 
     @GetMapping("/issues/{issueId}")
-    @Transactional(readOnly = true)
     public IssueDetail issueDetail(@PathVariable Long issueId, JwtAuthenticationToken authentication) {
         User user = currentUser(authentication);
         Issue issue = lookup.issue(issueId);
+        requireExternalProject(authentication, issue.getProject().getId());
         requireVisibleProject(issue.getProject(), user);
+        requireVisibleIssue(issue, user);
+        issueNotifications.markSeen(issue, user);
         return new IssueDetail(issueOutput(issue),
-            values.findByIssueId(issueId).stream().map(data -> valueOutput(data, definitions.findById(data.getDefinitionId())
-                .map(IssueFieldDefinition::getLabel).orElse("Campo " + data.getDefinitionId()))).toList(),
-            attachments.findByIssue_IdOrderByUploadedAtAscIdAsc(issueId).stream().map(WorkspaceIssueController::attachmentOutput).toList(),
+            values.findByIssueId(issueId).stream()
+                .flatMap(data -> definitions.findById(data.getDefinitionId()).stream()
+                    .filter(definition -> canUseField(definition, user))
+                    .map(definition -> valueOutput(data, definition.getLabel())))
+                .toList(),
+            attachments.findByIssue_IdOrderByUploadedAtAscIdAsc(issueId).stream()
+                .filter(attachment -> attachment.getDefinition() == null || canUseField(attachment.getDefinition(), user))
+                .map(WorkspaceIssueController::attachmentOutput).toList(),
             comments.findByIssue_IdOrderByDateAscIdAsc(issueId).stream().map(comment -> commentOutput(comment, user)).toList());
     }
 
@@ -187,9 +263,10 @@ public class WorkspaceIssueController {
     @Transactional(readOnly = true)
     public List<FieldOutput> fieldsByProject(@PathVariable Long projectId, JwtAuthenticationToken authentication) {
         Project project = lookup.project(projectId);
-        requireVisibleProject(project, currentUser(authentication));
+        User user = currentUser(authentication);
+        requireVisibleProject(project, user);
         return definitions.findByProject_Id(projectId).stream()
-            .filter(definition -> definition.getScope() == FieldScope.USER)
+            .filter(definition -> canUseField(definition, user))
             .map(WorkspaceIssueController::fieldOutput)
             .toList();
     }
@@ -198,9 +275,10 @@ public class WorkspaceIssueController {
     @Transactional(readOnly = true)
     public List<FieldOptionOutput> fieldOptionsByProject(@PathVariable Long projectId, JwtAuthenticationToken authentication) {
         Project project = lookup.project(projectId);
-        requireVisibleProject(project, currentUser(authentication));
+        User user = currentUser(authentication);
+        requireVisibleProject(project, user);
         return options.findByDefinition_Project_Id(projectId).stream()
-            .filter(option -> option.isActive() && option.getDefinition().getScope() == FieldScope.USER)
+            .filter(option -> option.isActive() && canUseField(option.getDefinition(), user))
             .map(WorkspaceIssueController::fieldOptionOutput)
             .toList();
     }
@@ -215,10 +293,48 @@ public class WorkspaceIssueController {
 
         Issue issue = new Issue(project, input.title().trim(), input.description().trim(), null);
         issue.setIssuer(reporter);
+        issue.setInternal(isInternalUser(reporter) && Boolean.TRUE.equals(input.internal()));
         Issue saved = issues.save(issue);
-        values.saveAll(validatedValues(saved, input.values() == null ? List.of() : input.values()));
-        eventService.issueEvent(EventType.ISSUE_CREATED, saved, reporter, "Nuova segnalazione creata");
+        List<IssueData> initialValues = validatedValues(saved,
+            input.values() == null ? List.of() : input.values(), writableScopesFor(reporter));
+        values.saveAll(initialValues);
+        String fields = fieldSnapshot(initialValues);
+        eventService.issueEvent(EventType.ISSUE_CREATED, saved, reporter,
+            "Titolo: " + saved.getTitle() + "\nDescrizione: " + saved.getDescription()
+                + (fields.isBlank() ? "" : "\nCampi:\n" + fields));
+        log.info("Issue created: project={} issue={} actor={} internal={}",
+            project.getId(), saved.getId(), reporter.getId(), saved.isInternal());
         return issueOutput(saved);
+    }
+
+    @PatchMapping("/issues/{issueId}/values")
+    public IssueDetail updateTeamValues(@PathVariable Long issueId, @Valid @RequestBody ValuesPatch input,
+                                        JwtAuthenticationToken authentication) {
+        User user = currentUser(authentication);
+        if (!isInternalUser(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "TEAM or ADMIN role required");
+        }
+        Issue issue = lookup.issue(issueId);
+        requireVisibleProject(issue.getProject(), user);
+        requireVisibleIssue(issue, user);
+        List<IssueFieldDefinition> teamFields = definitions.findByProject_Id(issue.getProject().getId()).stream()
+            .filter(definition -> definition.getScope() == FieldScope.TEAM)
+            .toList();
+        List<Long> teamFieldIds = teamFields.stream().map(IssueFieldDefinition::getId).toList();
+        List<IssueData> previousValues = values.findByIssueId(issueId).stream()
+            .filter(value -> teamFieldIds.contains(value.getDefinitionId())).toList();
+        List<IssueData> updatedValues = validatedValues(issue,
+            input.values() == null ? List.of() : input.values(), Set.of(FieldScope.TEAM));
+        String changes = fieldChanges(teamFields, previousValues, updatedValues);
+        if (!teamFieldIds.isEmpty()) {
+            values.deleteByIssueIdAndDefinitionIdIn(issue.getId(), teamFieldIds);
+        }
+        values.saveAll(updatedValues);
+        if (!changes.isBlank()) {
+            eventService.issueEvent(EventType.ISSUE_VALUES_CHANGED, issue, user, changes);
+            log.info("Issue values changed: project={} issue={} actor={}", issue.getProject().getId(), issue.getId(), user.getId());
+        }
+        return issueDetail(issueId, authentication);
     }
 
     @PostMapping(value = "/issues/{issueId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -229,9 +345,10 @@ public class WorkspaceIssueController {
         User user = currentUser(authentication);
         Issue issue = lookup.issue(issueId);
         requireVisibleProject(issue.getProject(), user);
+        requireVisibleIssue(issue, user);
         IssueFieldDefinition definition = lookup.definition(definitionId);
         if (!definition.getProject().getId().equals(issue.getProject().getId())
-            || definition.getScope() != FieldScope.USER || definition.getType() != FieldType.ATTACHMENTS) {
+            || !canUseField(definition, user) || definition.getType() != FieldType.ATTACHMENTS) {
             throw ApiLookup.badRequest("Attachment field is not available for this issue");
         }
         if (file.isEmpty()) throw ApiLookup.badRequest("Attachment file is empty");
@@ -249,10 +366,14 @@ public class WorkspaceIssueController {
             file.transferTo(target);
             attachment.setStoredPath(target.toString());
             eventService.issueEvent(EventType.ISSUE_ATTACHMENT_UPLOADED, issue, user,
-                "Allegato caricato: " + originalName);
+                "File: " + originalName + "\nDimensione: " + file.getSize() + " byte");
+            log.info("Issue attachment uploaded: project={} issue={} attachment={} actor={} size={}",
+                issue.getProject().getId(), issue.getId(), attachment.getId(), user.getId(), file.getSize());
             return attachmentOutput(attachment);
         } catch (IOException exception) {
             attachments.delete(attachment);
+            log.warn("Issue attachment upload failed: project={} issue={} actor={} file={} reason={}",
+                issue.getProject().getId(), issue.getId(), user.getId(), originalName, exception.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Cannot store attachment", exception);
         }
     }
@@ -265,6 +386,10 @@ public class WorkspaceIssueController {
         IssueAttachment attachment = attachments.findById(attachmentId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
         requireVisibleProject(attachment.getIssue().getProject(), user);
+        requireVisibleIssue(attachment.getIssue(), user);
+        if (attachment.getDefinition() != null && !canUseField(attachment.getDefinition(), user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Attachment not available");
+        }
         try {
             Path path = Paths.get(attachment.getStoredPath()).normalize();
             Resource resource = new UrlResource(path.toUri());
@@ -287,8 +412,11 @@ public class WorkspaceIssueController {
         User user = currentUser(authentication);
         Issue issue = lookup.issue(issueId);
         requireVisibleProject(issue.getProject(), user);
+        requireVisibleIssue(issue, user);
         IssueComment comment = comments.save(new IssueComment(issue, user, input.comment().trim()));
-        eventService.issueEvent(EventType.ISSUE_COMMENT_ADDED, issue, user, "Nuovo commento aggiunto");
+        eventService.issueEvent(EventType.ISSUE_COMMENT_ADDED, issue, user, "Commento:\n" + comment.getComment());
+        log.info("Issue comment added: project={} issue={} comment={} actor={}",
+            issue.getProject().getId(), issue.getId(), comment.getId(), user.getId());
         return commentOutput(comment, user);
     }
 
@@ -298,6 +426,7 @@ public class WorkspaceIssueController {
         User user = currentUser(authentication);
         IssueComment comment = lookup.comment(commentId);
         requireVisibleProject(comment.getIssue().getProject(), user);
+        requireVisibleIssue(comment.getIssue(), user);
         boolean owner = comment.getUser() != null && comment.getUser().getId().equals(user.getId());
         boolean withinWindow = comment.getDate() != null
             && comment.getDate().plus(Duration.ofMinutes(10)).isAfter(Instant.now());
@@ -305,6 +434,10 @@ public class WorkspaceIssueController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Comment cannot be deleted");
         }
         comments.delete(comment);
+        eventService.issueEvent(EventType.ISSUE_COMMENT_DELETED, comment.getIssue(), user,
+            "Commento eliminato:\n" + comment.getComment());
+        log.info("Issue comment deleted: project={} issue={} comment={} actor={}",
+            comment.getIssue().getProject().getId(), comment.getIssue().getId(), comment.getId(), user.getId());
     }
 
     @PatchMapping("/issues/{issueId}/approval")
@@ -312,6 +445,11 @@ public class WorkspaceIssueController {
         User user = currentUser(authentication);
         Issue issue = lookup.issue(issueId);
         requireVisibleProject(issue.getProject(), user);
+        requireVisibleIssue(issue, user);
+        return approve(issue, user);
+    }
+
+    private IssueOutput approve(Issue issue, User user) {
         if (user.getRole() != Role.SUPERUSER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "SUPERUSER role required");
         }
@@ -321,7 +459,8 @@ public class WorkspaceIssueController {
         issue.setStatus(IssueStatus.APPROVED);
         issue.setApprovedAt(Instant.now());
         issue.setApprover(user);
-        eventService.issueEvent(EventType.ISSUE_APPROVED, issue, user, "Segnalazione approvata");
+        eventService.issueEvent(EventType.ISSUE_APPROVED, issue, user,
+            "Stato: " + statusLabel(IssueStatus.RELEASED) + " → " + statusLabel(IssueStatus.APPROVED));
         return issueOutput(issue);
     }
 
@@ -331,6 +470,7 @@ public class WorkspaceIssueController {
         User user = currentUser(authentication);
         Issue issue = lookup.issue(issueId);
         requireVisibleProject(issue.getProject(), user);
+        requireVisibleIssue(issue, user);
         boolean admin = user.getRole() == Role.ADMIN;
         boolean reporter = issue.getIssuer() != null && issue.getIssuer().getId().equals(user.getId());
         boolean withinWindow = issue.getCreatedAt() != null
@@ -338,8 +478,11 @@ public class WorkspaceIssueController {
         if (!admin && (!reporter || !withinWindow)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Issue cannot be deleted");
         }
-        eventService.issueEvent(EventType.ISSUE_DELETED, issue, user, "Segnalazione eliminata");
+        eventService.issueEvent(EventType.ISSUE_DELETED, issue, user,
+            "Titolo: " + issue.getTitle() + "\nDescrizione: " + issue.getDescription());
+        eventService.detachIssue(issueId);
         issues.delete(issue);
+        log.info("Issue deleted: project={} issue={} actor={}", issue.getProject().getId(), issueId, user.getId());
     }
 
     @PatchMapping("/issues/{issueId}/planning")
@@ -348,10 +491,20 @@ public class WorkspaceIssueController {
         User user = currentUser(authentication);
         requireAdmin(user);
         Issue issue = lookup.issue(issueId);
+        IssueType previousType = issue.getIssueType();
+        User previousDeveloper = issue.getDeveloper();
+        User nextDeveloper = teamParticipant(issue.getProject(), input.devUserId());
         issue.setIssueType(input.issueType());
-        issue.setDeveloper(teamParticipant(issue.getProject(), input.devUserId()));
-        eventService.issueEvent(EventType.ISSUE_PLANNED, issue, user,
-            "Segnalazione pianificata come " + input.issueType());
+        issue.setDeveloper(nextDeveloper);
+        List<String> changes = new ArrayList<>();
+        if (previousType != input.issueType()) changes.add(
+            "Tipologia: " + issueTypeLabel(previousType) + " → " + issueTypeLabel(input.issueType()));
+        if (!java.util.Objects.equals(id(previousDeveloper), id(nextDeveloper))) changes.add(
+            "Sviluppatore: " + userLabel(previousDeveloper) + " → " + userLabel(nextDeveloper));
+        if (!changes.isEmpty()) eventService.issueEvent(EventType.ISSUE_PLANNED, issue, user,
+            String.join("\n", changes));
+        if (!changes.isEmpty()) log.info("Issue planned: project={} issue={} actor={} changes={}",
+            issue.getProject().getId(), issue.getId(), user.getId(), changes.size());
         return issueOutput(issue);
     }
 
@@ -361,41 +514,125 @@ public class WorkspaceIssueController {
         User actor = currentUser(authentication);
         Issue issue = lookup.issue(issueId);
         requireVisibleProject(issue.getProject(), actor);
+        requireVisibleIssue(issue, actor);
         IssueStatus previousStatus = issue.getStatus();
         if (input.status() == IssueStatus.APPROVED && previousStatus != IssueStatus.APPROVED) {
-            throw ApiLookup.badRequest("APPROVED status can only be set by SUPERUSER approval");
+            return approve(issue, actor);
+        }
+        if (previousStatus != input.status() && !isInternalUser(actor)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "TEAM or ADMIN role required to change issue status");
         }
         issue.setStatus(input.status());
         if (input.status() == IssueStatus.RELEASED && issue.getReleasedAt() == null) {
             issue.setReleasedAt(Instant.now());
         }
-        if (input.status() == IssueStatus.APPROVED && issue.getApprovedAt() == null) {
-            issue.setApprovedAt(Instant.now());
-        }
         if (previousStatus != input.status()) {
             eventService.issueEvent(EventType.ISSUE_STATUS_CHANGED, issue, actor,
-                "Lo stato della segnalazione è cambiato da " + previousStatus + " a " + input.status());
+                "Stato: " + statusLabel(previousStatus) + " → " + statusLabel(input.status()));
+            log.info("Issue status changed: project={} issue={} actor={} from={} to={}",
+                issue.getProject().getId(), issue.getId(), actor.getId(), previousStatus, input.status());
         }
         return issueOutput(issue);
     }
 
 
 
-    private List<IssueData> validatedValues(Issue issue, List<FieldValueInput> inputValues) {
-        Map<Long, IssueFieldDefinition> userFields = definitions.findByProject_Id(issue.getProject().getId()).stream()
-            .filter(definition -> definition.getScope() == FieldScope.USER)
+    private String fieldSnapshot(List<IssueData> issueValues) {
+        return issueValues.stream()
+            .sorted((a, b) -> a.getDefinitionId().equals(b.getDefinitionId())
+                ? Integer.compare(a.getPosition(), b.getPosition()) : a.getDefinitionId().compareTo(b.getDefinitionId()))
+            .map(value -> definitions.findById(value.getDefinitionId())
+                .map(definition -> definition.getLabel() + ": " + value.getValue())
+                .orElse("Campo #" + value.getDefinitionId() + ": " + value.getValue()))
+            .collect(Collectors.joining("\n"));
+    }
+
+    private static String fieldChanges(List<IssueFieldDefinition> fields, List<IssueData> before, List<IssueData> after) {
+        return fields.stream()
+            .map(field -> {
+                List<String> oldValues = fieldValues(before, field.getId());
+                List<String> newValues = fieldValues(after, field.getId());
+                if (oldValues.equals(newValues)) return "";
+                return field.getLabel() + ": " + displayValues(oldValues) + " → " + displayValues(newValues);
+            })
+            .filter(change -> !change.isBlank())
+            .collect(Collectors.joining("\n"));
+    }
+
+    private static List<String> fieldValues(List<IssueData> values, Long definitionId) {
+        return values.stream().filter(value -> value.getDefinitionId().equals(definitionId))
+            .sorted((a, b) -> Integer.compare(a.getPosition(), b.getPosition()))
+            .map(IssueData::getValue).toList();
+    }
+
+    private static String displayValues(List<String> values) {
+        return values.isEmpty() ? "(vuoto)" : String.join(", ", values);
+    }
+
+    private static String statusLabel(IssueStatus status) {
+        return switch (status) {
+            case REPORTED -> "Segnalato";
+            case IN_PROGRESS -> "In lavorazione";
+            case COMPLETED -> "Completato";
+            case RELEASED -> "Rilasciato";
+            case APPROVED -> "Approvato";
+        };
+    }
+
+    private static String issueTypeLabel(IssueType type) {
+        if (type == null) return "Non categorizzata";
+        return switch (type) {
+            case ANOMALY -> "Anomalia";
+            case IMPROVEMENT -> "Miglioria";
+            case IMPLEMENTATION -> "Implementazione";
+        };
+    }
+
+    private static String userLabel(User user) {
+        return user == null ? "Non assegnato" : user.getUsername();
+    }
+
+    private static String reportSearchText(Issue issue) {
+        return String.join(" ", issue.getId().toString(), issue.getTitle(), issue.getDescription(),
+            statusLabel(issue.getStatus()), issueTypeLabel(issue.getIssueType()), userLabel(issue.getIssuer()),
+            userLabel(issue.getDeveloper())).toLowerCase(Locale.ROOT);
+    }
+
+    private static List<String> reportFilterLabels(
+        String search, IssueStatus status, IssueType issueType, boolean uncategorized,
+        Long issuerId, boolean issuerUnassigned, Long developerId, boolean developerUnassigned,
+        Boolean internal, Instant from, Instant to
+    ) {
+        List<String> labels = new ArrayList<>();
+        if (search != null && !search.isBlank()) labels.add("Ricerca: " + search.trim());
+        if (status != null) labels.add("Stato: " + statusLabel(status));
+        if (issueType != null) labels.add("Tipologia: " + issueTypeLabel(issueType));
+        if (uncategorized) labels.add("Tipologia: Non categorizzata");
+        if (issuerId != null) labels.add("Segnalatore ID: " + issuerId);
+        if (issuerUnassigned) labels.add("Segnalatore: Non assegnato");
+        if (developerId != null) labels.add("Sviluppatore ID: " + developerId);
+        if (developerUnassigned) labels.add("Sviluppatore: Non assegnato");
+        if (internal != null) labels.add("Visibilità: " + (internal ? "Solo interne" : "Solo pubbliche"));
+        if (from != null) labels.add("Dal: " + from);
+        if (to != null) labels.add("Al: " + to);
+        return labels;
+    }
+
+    private List<IssueData> validatedValues(Issue issue, List<FieldValueInput> inputValues, Set<FieldScope> writableScopes) {
+        Map<Long, IssueFieldDefinition> writableFields = definitions.findByProject_Id(issue.getProject().getId()).stream()
+            .filter(definition -> writableScopes.contains(definition.getScope()))
             .collect(Collectors.toMap(IssueFieldDefinition::getId, definition -> definition));
         Map<Long, List<FieldValueInput>> byDefinition = inputValues.stream()
             .filter(input -> input.value() != null && !input.value().isBlank())
             .collect(Collectors.groupingBy(FieldValueInput::definitionId, LinkedHashMap::new, Collectors.toList()));
 
         for (Long definitionId : byDefinition.keySet()) {
-            if (!userFields.containsKey(definitionId)) {
-                throw ApiLookup.badRequest("Field definition belongs to another project or is not visible to USER");
+            if (!writableFields.containsKey(definitionId)) {
+                throw ApiLookup.badRequest("Field definition belongs to another project or is not writable");
             }
         }
 
-        for (IssueFieldDefinition definition : userFields.values()) {
+        for (IssueFieldDefinition definition : writableFields.values()) {
             if (definition.isMandatory() && definition.getType() != FieldType.ATTACHMENTS
                 && !byDefinition.containsKey(definition.getId())) {
                 throw ApiLookup.badRequest("Missing mandatory field: " + definition.getCode());
@@ -404,7 +641,7 @@ public class WorkspaceIssueController {
 
         List<IssueData> output = new ArrayList<>();
         for (Map.Entry<Long, List<FieldValueInput>> entry : byDefinition.entrySet()) {
-            IssueFieldDefinition definition = userFields.get(entry.getKey());
+            IssueFieldDefinition definition = writableFields.get(entry.getKey());
             List<FieldValueInput> fieldValues = entry.getValue();
             if (!definition.isMultiple() && fieldValues.size() > 1) {
                 throw ApiLookup.badRequest("Field accepts only one value: " + definition.getCode());
@@ -488,9 +725,42 @@ public class WorkspaceIssueController {
         }
     }
 
+    private void requireVisibleIssue(Issue issue, User user) {
+        if (!canSeeIssue(issue, user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Issue not available");
+        }
+    }
+
+    private boolean canSeeIssue(Issue issue, User user) {
+        return !issue.isInternal() || isInternalUser(user);
+    }
+
+    private boolean canUseField(IssueFieldDefinition definition, User user) {
+        if (definition.getScope() == FieldScope.USER) return true;
+        if (definition.getScope() == FieldScope.SUPERUSER) return user.getRole() == Role.SUPERUSER || isInternalUser(user);
+        return definition.getScope() == FieldScope.TEAM && isInternalUser(user);
+    }
+
+    private boolean isInternalUser(User user) {
+        return user.getRole() == Role.ADMIN || user.getRole() == Role.TEAM;
+    }
+
+    private Set<FieldScope> writableScopesFor(User user) {
+        if (isInternalUser(user)) return Set.of(FieldScope.USER, FieldScope.TEAM);
+        if (user.getRole() == Role.SUPERUSER) return Set.of(FieldScope.USER, FieldScope.SUPERUSER);
+        return Set.of(FieldScope.USER);
+    }
+
     private User currentUser(JwtAuthenticationToken authentication) {
         return users.findById(Long.parseLong(authentication.getName()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    }
+
+    private static void requireExternalProject(JwtAuthenticationToken authentication, Long projectId) {
+        Number externalProjectId = authentication.getToken().getClaim("external_project_id");
+        if (externalProjectId != null && externalProjectId.longValue() != projectId) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "External session is bound to another project");
+        }
     }
 
     private static IssueOutput issueOutput(Issue issue) {

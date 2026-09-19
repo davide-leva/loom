@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,9 +17,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/companies")
@@ -28,9 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class CompanyController {
     private final CompanyRepository companies;
     private final ApiLookup lookup;
+    private final BrandingService branding;
 
-    public record Input(@NotBlank @Size(max = 64) String name) {}
-    public record Output(Long id, String name, boolean teamCompany) {}
+    public record Input(@NotBlank @Size(max = 64) String name, String primaryColor) {}
+    public record Output(Long id, String name, boolean teamCompany, String primaryColor, String logoUrl) {}
 
     @GetMapping
     public List<Output> getAll() {
@@ -45,14 +49,52 @@ public class CompanyController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Output insert(@Valid @RequestBody Input input) {
-        return output(companies.save(new Company(input.name())));
+        return create(input, null);
+    }
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public Output insertWithLogo(@Valid @RequestPart("input") Input input,
+                                 @RequestPart(value = "logo", required = false) MultipartFile logo) {
+        return create(input, logo);
+    }
+
+    private Output create(Input input, MultipartFile logo) {
+        Company company = companies.save(new Company(input.name().trim()));
+        company.setPrimaryColor(BrandingService.color(input.primaryColor()));
+        if (logo != null && !logo.isEmpty()) {
+            company.setLogoExtension(branding.saveLogo("companies", company.getId(), logo, null));
+        }
+        return output(company);
     }
 
     @PutMapping("/{id}")
     public Output update(@PathVariable Long id, @Valid @RequestBody Input input) {
+        return modify(id, input, null);
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Output updateWithLogo(@PathVariable Long id, @Valid @RequestPart("input") Input input,
+                                 @RequestPart(value = "logo", required = false) MultipartFile logo) {
+        return modify(id, input, logo);
+    }
+
+    private Output modify(Long id, Input input, MultipartFile logo) {
         Company company = lookup.company(id);
-        company.setName(input.name());
+        company.setName(input.name().trim());
+        company.setPrimaryColor(BrandingService.color(input.primaryColor()));
+        if (logo != null && !logo.isEmpty()) {
+            company.setLogoExtension(branding.saveLogo("companies", id, logo, company.getLogoExtension()));
+        }
         return output(company);
+    }
+
+    @DeleteMapping("/{id}/logo")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteLogo(@PathVariable Long id) {
+        Company company = lookup.company(id);
+        branding.deleteLogo("companies", id, company.getLogoExtension());
+        company.setLogoExtension(null);
     }
 
     @DeleteMapping("/{id}")
@@ -62,10 +104,13 @@ public class CompanyController {
         if (company.isTeamCompany()) {
             throw ApiLookup.conflict("Team company cannot be deleted");
         }
+        branding.deleteLogo("companies", id, company.getLogoExtension());
         companies.delete(company);
     }
 
     private static Output output(Company company) {
-        return new Output(company.getId(), company.getName(), company.isTeamCompany());
+        return new Output(company.getId(), company.getName(), company.isTeamCompany(),
+            company.getPrimaryColor(), company.getLogoExtension() == null ? null
+                : "/api/branding/companies/" + company.getId() + "/logo");
     }
 }

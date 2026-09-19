@@ -28,6 +28,12 @@ public class Company {
     @Column(name = "team_company", nullable = false)
     private boolean teamCompany;
 
+    @Column(name = "primary_color", nullable = false, length = 16)
+    private String primaryColor = "blue";
+
+    @Column(name = "logo_extension", length = 8)
+    private String logoExtension;
+
     public Company(String name) {
         this.name = name;
     }
