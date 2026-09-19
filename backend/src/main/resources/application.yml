@@ -31,10 +31,20 @@ app:
   attachments:
     root-folder: ${ATTACHMENTS_ROOT_FOLDER:./attachments}
     max-file-size: ${ATTACHMENTS_MAX_FILE_SIZE:25MB}
+  branding:
+    root-folder: ${ROOT_FOLDER:./branding}
 
   notifications:
     email:
       enabled: ${MAIL_NOTIFICATIONS_ENABLED:false}
-      from: ${MAIL_FROM:no-reply@softwaredue.local}
-      logo-path: ${MAIL_LOGO_PATH:../frontend/public/Logo_SoftwareDue.svg}
+      from: ${MAIL_FROM:no-reply@tickets.local}
       scheduler-delay: ${MAIL_NOTIFICATIONS_DELAY:5m}
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    it.sf2.tickets: ${LOG_LEVEL_APP:INFO}
+    org.springframework.web: ${LOG_LEVEL_WEB:WARN}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"

@@ -20,4 +20,5 @@ frontend/node_modules/
 # Runtime files
 attachments/
 backend/attachments/
+backend/branding/
 *.log

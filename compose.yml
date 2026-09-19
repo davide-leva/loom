@@ -18,7 +18,7 @@ services:
       retries: 10
 
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/your-org/sf2-tickets/backend:latest}
+    image: ghcr.io/davide-leva/ticket-platform/backend:latest
     container_name: tickets-backend
     restart: unless-stopped
     depends_on:
@@ -30,11 +30,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ATTACHMENTS_ROOT_FOLDER: /data/attachments
+      ROOT_FOLDER: /data/branding
       ATTACHMENTS_MAX_FILE_SIZE: ${ATTACHMENTS_MAX_FILE_SIZE:-25MB}
       ATTACHMENTS_MAX_REQUEST_SIZE: ${ATTACHMENTS_MAX_REQUEST_SIZE:-25MB}
       MAIL_NOTIFICATIONS_ENABLED: ${MAIL_NOTIFICATIONS_ENABLED:-false}
-      MAIL_FROM: ${MAIL_FROM:-no-reply@softwaredue.local}
-      MAIL_LOGO_PATH: /app/assets/Logo_SoftwareDue.svg
+      MAIL_FROM: ${MAIL_FROM:-no-reply@tickets.local}
       MAIL_NOTIFICATIONS_DELAY: ${MAIL_NOTIFICATIONS_DELAY:-5m}
       SMTP_HOST: ${SMTP_HOST:-localhost}
       SMTP_PORT: ${SMTP_PORT:-25}
@@ -46,9 +46,10 @@ services:
       - "${BACKEND_PORT:-8080}:8080"
     volumes:
       - attachments_data:/data/attachments
+      - branding_data:/data/branding
 
   frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/your-org/sf2-tickets/frontend:latest}
+    image: ghcr.io/davide-leva/ticket-platform/frontend:latest
     container_name: tickets-frontend
     restart: unless-stopped
     depends_on:
@@ -61,3 +62,4 @@ services:
 volumes:
   postgres_data:
   attachments_data:
+  branding_data:

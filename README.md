@@ -95,10 +95,11 @@ DB_PORT=5433
 
 ### Persistenza Docker
 
-Compose crea due volumi:
+Compose crea tre volumi:
 
 - `postgres_data`: dati PostgreSQL;
-- `attachments_data`: file caricati nelle issue.
+- `attachments_data`: file caricati nelle issue;
+- `branding_data`: loghi delle compagnie e dei progetti.
 
 Per fermare i container senza cancellare i dati:
 
@@ -156,7 +157,7 @@ Notifiche email:
 
 ```env
 MAIL_NOTIFICATIONS_ENABLED=false
-MAIL_FROM=no-reply@softwaredue.local
+MAIL_FROM=no-reply@tickets.local
 MAIL_NOTIFICATIONS_DELAY=5m
 SMTP_HOST=localhost
 SMTP_PORT=25
@@ -179,7 +180,7 @@ SMTP_PASSWORD=password-app
 MAIL_FROM=nome.account@gmail.com
 ```
 
-Il backend invia le email con il logo `Logo_SoftwareDue.svg` incluso nell’immagine Docker. Gli allegati vengono salvati dentro il container backend in `/data/attachments`, montato sul volume `attachments_data`.
+Il backend usa il logo della compagnia interna nelle email, se presente. Gli allegati vengono salvati nel volume `attachments_data`; i loghi nel volume `branding_data`.
 
 ## Avvio locale per sviluppo
 
@@ -208,7 +209,7 @@ npm install
 npm start
 ```
 
-Apri `http://localhost:4200`. Il server Angular inoltra `/api` al backend tramite `frontend/proxy.conf.json`.
+Apri `http://localhost:4200`. Il server Angular inoltra `/api`, incluso l'upgrade WebSocket, al backend tramite `frontend/proxy.conf.json`. Dopo una modifica a questo file, riavvia `npm start`: Angular legge la configurazione del proxy all'avvio.
 
 ## Note applicative
 
@@ -216,7 +217,9 @@ Conserva `JWT_SECRET` tra i riavvii: cambiandola, i token già emessi cessano di
 
 Flyway esegue le migrazioni in `backend/src/main/resources/db/migration/`. Hibernate verifica che le entità corrispondano allo schema senza modificarlo.
 
-Il frontend usa PrimeNG e il logo Software Due. L’header offre Dashboard, Pianificazione, Anomalie, Migliorie, Implementazioni e, per gli `ADMIN`, Configurazione. Il progetto selezionato viene conservato in un cookie distinto per utente.
+Il frontend usa PrimeNG. Durante il setup si scelgono il nome, il colore primary e un logo opzionale della compagnia interna. Ogni compagnia può avere un colore e un logo opzionale; ogni progetto può avere un logo opzionale. Il colore della compagnia dell’utente viene applicato dopo il login. L’header mostra il logo interno e, per gli utenti esterni, quello della loro compagnia. Il progetto selezionato viene conservato in un cookie distinto per utente.
+
+I loghi PNG, JPEG, WebP o SVG (massimo 2 MB) sono salvati in `ROOT_FOLDER/companies/<company_id>.<original_ext>` e `ROOT_FOLDER/projects/<project_id>.<original_ext>`. In Docker, `ROOT_FOLDER` è `/data/branding`; in locale il valore predefinito è `./branding` (relativo alla directory `backend`). Se il logo manca, l’interfaccia mostra il nome.
 
 ## Autenticazione
 
@@ -238,6 +241,16 @@ Authorization: Bearer <token>
 `GET /api/auth/projects` restituisce i progetti visibili all’utente corrente.
 
 Non è prevista registrazione pubblica. Gli utenti vengono creati dagli `ADMIN` nelle sezioni di configurazione.
+
+### Autenticazione esterna
+
+In **Configurazione → Autenticazione esterna**, un `ADMIN` può abilitare l’accesso per progetto e creare applicazioni con un secret e utenti associati tramite il valore `sub`. Ogni applicazione usa HS256, HS384 o HS512 e può indicare se il secret inserito è Base64. In quel caso il backend lo decodifica prima di verificare la firma; altrimenti usa i byte UTF-8 del testo inserito. La chiave risultante deve contenere almeno 32, 48 o 64 byte rispettivamente, e al massimo 512 byte. Il JWT deve avere `sub` mappato ed `exp` non scaduto.
+
+Il sistema esterno apre `GET /login?t=<external_token>`. Il frontend rimuove subito `t` dall’URL e invia il token a `POST /api/auth/external-login`; il backend verifica firma, scadenza, mapping e appartenenza al progetto, poi emette il normale access token applicativo. Il JWT esterno non viene salvato.
+
+Usa HTTPS e configura gli eventuali proxy davanti a nginx per non registrare la query string di `/login`: il token è presente nella prima richiesta HTTP.
+
+Il secret può essere sostituito modificando l’applicazione; lasciando vuoto il campo viene conservato. Le API di configurazione non ne restituiscono mai il valore. Nel database è cifrato con AES-GCM usando una chiave derivata da `JWT_SECRET`. Conserva `JWT_SECRET` stabile: se cambia, i secret esterni salvati non sono più decifrabili e devono essere reinseriti.
 
 ## Gestione compagnie, utenti e progetti
 
@@ -278,10 +291,20 @@ Eventi notificati:
 - cambio stato;
 - approvazione;
 - nuovo commento;
+- eliminazione commento;
 - nuovo allegato;
+- modifica dei campi team;
 - eliminazione issue.
 
 Il testo email è in italiano e traduce anche stati e tipologie.
+
+## Eventi e sincronizzazione live
+
+Il registro **Eventi** è accessibile solo a `TEAM` e `ADMIN` e si può filtrare per tipo, utente e data. Le segnalazioni interne restano visibili solo ai ruoli interni.
+
+Dashboard, kanban, pianificazione, registro eventi e dettagli aperti si aggiornano tramite WebSocket quando vengono create o modificate segnalazioni, commenti, allegati, campi team, pianificazioni e stati. Gli avvisi sono inviati dopo il commit della modifica. Il browser apre il canale con un ticket monouso di breve durata, ottenuto tramite JWT, e si riconnette automaticamente se la connessione cade. Il proxy deve inoltrare l'upgrade WebSocket su `/api/work/live`; la configurazione nginx inclusa lo fa già.
+
+Il broker WebSocket è locale al processo backend. Per distribuire più istanze backend serve un broker condiviso per propagare gli avvisi tra istanze.
 
 ## API amministrative
 
@@ -299,3 +322,64 @@ I seguenti endpoint richiedono un JWT con ruolo `ADMIN`. Ognuno supporta `GET /`
 | Commenti | `/api/issue-comments` | `/project/{projectId}`, `/issue/{issueId}` |
 
 `GET /api/users/project/{projectId}` restituisce gli utenti effettivi del progetto. `/api/project-users` gestisce le assegnazioni esplicite non coperte dal collegamento automatico tra progetto e compagnia.
+
+## Developer Notes
+
+### API notifiche issue
+
+Il riepilogo delle issue nuove o aggiornate è disponibile con:
+
+```http
+GET /api/work/projects/{projectId}/notifications
+Authorization: Bearer <access-token-applicativo>
+```
+
+L'utente non viene passato nella richiesta: viene sempre ricavato dal `sub` del Bearer token. Il `projectId` è nel path, coerentemente con le altre API workspace, e il backend verifica che quell'utente possa vedere il progetto. La risposta è, ad esempio:
+
+```json
+{
+  "projectId": 12,
+  "total": 3,
+  "planning": 1,
+  "anomalies": 1,
+  "improvements": 0,
+  "implementations": 1,
+  "issues": [
+    { "issueId": 41, "issueType": null },
+    { "issueId": 44, "issueType": "ANOMALY" },
+    { "issueId": 51, "issueType": "IMPLEMENTATION" }
+  ]
+}
+```
+
+I contatori rappresentano issue distinte, non eventi: più eventi non letti sulla stessa issue producono un solo incremento. Le azioni eseguite dall'utente stesso non generano un non-letto per quell'utente. Le issue senza tipologia confluiscono in `planning`; le altre nei tre contatori di tipologia. Visibilità delle issue interne, membership del progetto e cancellazioni rispettano le stesse regole delle API workspace.
+
+`GET /api/work/projects/{projectId}/issues` restituisce la lista senza modificare lo stato di lettura. `GET /api/work/issues/{issueId}` restituisce il dettaglio e, nella stessa transazione, registra per l'utente l'ultimo evento visto: dalla successiva chiamata al riepilogo l'issue non compare più, finché non arriva un nuovo evento di un altro utente.
+
+### Token interni ed esterni
+
+Con un token interno ottenuto da `POST /api/auth/login`, il Bearer token si usa direttamente sull'API notifiche.
+
+Le applicazioni configurate in **Configurazione → Autenticazione esterna** effettuano prima l'exchange del proprio JWT esterno:
+
+```http
+POST /api/auth/external-login
+Content-Type: application/json
+
+{ "token": "<jwt-esterno-firmato>" }
+```
+
+Il backend valida firma, algoritmo, `exp`, mapping di `sub`, progetto abilitato e membership. La risposta contiene il progetto vincolato al mapping e una sessione applicativa che include internamente lo stesso vincolo di progetto:
+
+```json
+{
+  "session": {
+    "accessToken": "<access-token-applicativo>",
+    "tokenType": "Bearer",
+    "expiresInSeconds": 900
+  },
+  "projectId": 12
+}
+```
+
+L'applicazione esterna usa quindi `session.accessToken` come Bearer per `GET /api/work/projects/12/notifications` e, quando vuole marcare una issue come vista, per `GET /api/work/issues/{issueId}`. Per queste operazioni il backend rifiuta un `projectId` o una issue appartenenti a un progetto diverso da quello dell'applicazione esterna. In questo modo la stessa API supporta login interno e identità provenienti da token esterni mantenendo un solo formato di access token autorizzativo; il JWT esterno non viene inoltrato alle API workspace né conservato dal sistema.

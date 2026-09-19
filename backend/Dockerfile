@@ -10,8 +10,7 @@ RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN mkdir -p /data/attachments /app/assets
+RUN mkdir -p /data/attachments /data/branding
 COPY --from=build /workspace/backend/target/sf2-tickets-0.1.0-SNAPSHOT.jar /app/app.jar
-COPY frontend/public/Logo_SoftwareDue.svg /app/assets/Logo_SoftwareDue.svg
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

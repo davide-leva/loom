@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "start": "ng serve",
-    "build": "ng build"
+    "start": "ng serve --host 0.0.0.0",
+    "build": "ng build",
+    "test": "tsc -p tsconfig.test.json && node --test \"dist/out-tsc/tests/**/*.test.js\"",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@angular/animations": "^19.2.0",
@@ -25,6 +27,7 @@
     "@angular-devkit/build-angular": "^19.2.14",
     "@angular/cli": "^19.2.14",
     "@angular/compiler-cli": "^19.2.0",
+    "@playwright/test": "^1.55.0",
     "typescript": "~5.7.2"
   }
 }
