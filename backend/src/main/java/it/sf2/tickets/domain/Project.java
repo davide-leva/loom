@@ -45,6 +45,9 @@ public class Project {
     @OneToMany(mappedBy = "project", cascade = CascadeType.REMOVE)
     private List<ExternalJwtSecret> externalJwtSecrets = new ArrayList<>();
 
+    @Column(name = "archive_after_days")
+    private Integer archiveAfterDays;
+
     public Project(String name, Company company) {
         this.name = name;
         this.company = company;

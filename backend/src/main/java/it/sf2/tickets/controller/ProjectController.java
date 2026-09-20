@@ -5,6 +5,7 @@ import it.sf2.tickets.domain.Role;
 import it.sf2.tickets.repository.ProjectRepository;
 import it.sf2.tickets.repository.ProjectUserRepository;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -38,8 +39,11 @@ public class ProjectController {
     private final ApiLookup lookup;
     private final BrandingService branding;
 
-    public record Input(@NotBlank @Size(max = 32) String name, Long companyId) {}
-    public record Output(Long id, String name, Long companyId, String logoUrl) {}
+    public record Input(@NotBlank @Size(max = 32) String name, Long companyId,
+                        @Min(1) Integer archiveAfterDays) {}
+    public record Output(Long id, String name, Long companyId, String logoUrl,
+                         Integer archiveAfterDays) {}
+    public record ArchiveAfterDaysInput(Integer archiveAfterDays) {}
 
     @GetMapping
     public List<Output> getAll() {
@@ -73,6 +77,7 @@ public class ProjectController {
     private Output create(Input input, MultipartFile logo) {
         Project project = projects.save(new Project(input.name().trim(),
             input.companyId() == null ? null : lookup.company(input.companyId())));
+        project.setArchiveAfterDays(input.archiveAfterDays());
         if (logo != null && !logo.isEmpty()) {
             project.setLogoExtension(branding.saveLogo("projects", project.getId(), logo, null));
         }
@@ -98,9 +103,26 @@ public class ProjectController {
         project.setName(input.name().trim());
         project.setCompany(newCompanyId == null ? null : lookup.company(newCompanyId));
         deleteAutomaticRows(project.getId(), newCompanyId);
+        project.setArchiveAfterDays(input.archiveAfterDays());
         if (logo != null && !logo.isEmpty()) {
             project.setLogoExtension(branding.saveLogo("projects", id, logo, project.getLogoExtension()));
         }
+        return output(project);
+    }
+
+    /**
+     * Lightweight endpoint used by the project edit dialog to update only the archive threshold
+     * without touching the rest of the project (logo, name, company…). Accepts {@code null} to
+     * disable auto-archiving.
+     */
+    @PutMapping("/{id}/archive-after-days")
+    public Output updateArchiveAfterDays(@PathVariable Long id, @RequestBody ArchiveAfterDaysInput input) {
+        Project project = lookup.project(id);
+        Integer days = input == null ? null : input.archiveAfterDays();
+        if (days != null && days < 1) {
+            throw ApiLookup.badRequest("archiveAfterDays must be at least 1 or null to disable");
+        }
+        project.setArchiveAfterDays(days);
         return output(project);
     }
 
@@ -123,7 +145,8 @@ public class ProjectController {
     private static Output output(Project project) {
         return new Output(project.getId(), project.getName(),
             project.getCompany() == null ? null : project.getCompany().getId(),
-            project.getLogoExtension() == null ? null : "/api/branding/projects/" + project.getId() + "/logo");
+            project.getLogoExtension() == null ? null : "/api/branding/projects/" + project.getId() + "/logo",
+            project.getArchiveAfterDays());
     }
 
     private void deleteAutomaticRows(Long projectId, Long companyId) {

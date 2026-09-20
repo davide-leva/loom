@@ -62,11 +62,13 @@ export interface Project {
   name: string;
   companyId: number | null;
   logoUrl: string | null;
+  archiveAfterDays: number | null;
 }
 
 export interface ProjectInput {
   name: string;
   companyId: number | null;
+  archiveAfterDays?: number | null;
 }
 
 export type FieldType = 'TEXT' | 'TEXTAREA' | 'NUMBER' | 'SELECT' | 'ATTACHMENTS';
@@ -77,6 +79,7 @@ export interface IssueField {
   projectId: number;
   code: string;
   label: string;
+  description: string | null;
   mandatory: boolean;
   multiple: boolean;
   type: FieldType;
@@ -87,6 +90,7 @@ export interface IssueFieldInput {
   projectId?: number;
   code: string;
   label: string;
+  description?: string | null;
   mandatory: boolean;
   multiple: boolean;
   type: FieldType;
@@ -193,6 +197,11 @@ export class AdminConfigService {
 
   deleteProject(id: number): Observable<void> {
     return this.http.delete<void>(`/api/projects/${id}`, { headers: this.auth.authHeaders() });
+  }
+
+  updateProjectArchiveAfterDays(id: number, archiveAfterDays: number | null): Observable<Project> {
+    return this.http.put<Project>(`/api/projects/${id}/archive-after-days`,
+      { archiveAfterDays }, { headers: this.auth.authHeaders() });
   }
 
   projectUsers(projectId: number): Observable<AppUser[]> {

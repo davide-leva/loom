@@ -4,6 +4,7 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
 import { FileSelectEvent, FileUploadModule } from 'primeng/fileupload';
+import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
@@ -30,7 +31,7 @@ interface UserOption {
 
 @Component({
   selector: 'app-projects',
-  imports: [FormsModule, ButtonModule, CardModule, DialogModule, FileUploadModule, InputTextModule, SelectModule,
+  imports: [FormsModule, ButtonModule, CardModule, DialogModule, FileUploadModule, InputNumberModule, InputTextModule, SelectModule,
     TableModule, EntityTableComponent],
   templateUrl: './projects.component.html',
   styleUrl: './projects.component.css'
@@ -54,7 +55,8 @@ export class ProjectsComponent implements OnInit {
 
   formVisible = false;
   editingProject: Project | null = null;
-  draft: ProjectInput = { name: '', companyId: null };
+  draft: ProjectInput = { name: '', companyId: null, archiveAfterDays: null };
+  archiveDirty = false;
   logo: File | null = null;
   saveError = '';
   saving = false;
@@ -95,7 +97,8 @@ export class ProjectsComponent implements OnInit {
 
   openCreate(): void {
     this.editingProject = null;
-    this.draft = { name: '', companyId: null };
+    this.draft = { name: '', companyId: null, archiveAfterDays: null };
+    this.archiveDirty = false;
     this.logo = null;
     this.saveError = '';
     this.formVisible = true;
@@ -104,11 +107,39 @@ export class ProjectsComponent implements OnInit {
   openEdit(row: ProjectRow): void {
     this.editingProject = this.projects.find(project => project.id === row.id) ?? null;
     if (!this.editingProject) return;
-    this.draft = { name: this.editingProject.name, companyId: this.editingProject.companyId };
+    this.draft = {
+      name: this.editingProject.name,
+      companyId: this.editingProject.companyId,
+      archiveAfterDays: this.editingProject.archiveAfterDays
+    };
+    this.archiveDirty = false;
     this.logo = null;
     this.saveError = '';
     this.formVisible = true;
     this.loadMembers();
+  }
+
+  onArchiveDaysChange(value: number | null): void {
+    this.draft.archiveAfterDays = value;
+    this.archiveDirty = true;
+  }
+
+  persistArchiveDays(): void {
+    const project = this.editingProject;
+    if (!project || !this.archiveDirty || this.saving) return;
+    this.saving = true;
+    this.saveError = '';
+    this.api.updateProjectArchiveAfterDays(project.id, this.draft.archiveAfterDays ?? null)
+      .pipe(finalize(() => this.saving = false)).subscribe({
+        next: updated => {
+          this.editingProject = updated;
+          this.draft.archiveAfterDays = updated.archiveAfterDays;
+          this.projects = this.projects.map(existing => existing.id === updated.id ? updated : existing);
+          this.updateRows();
+          this.archiveDirty = false;
+        },
+        error: () => this.saveError = 'Impossibile salvare i parametri di archiviazione. Riprova.'
+      });
   }
 
   closeForm(): void {
@@ -120,6 +151,7 @@ export class ProjectsComponent implements OnInit {
     this.selectedExternalUserId = null;
     this.assignError = '';
     this.removingUserId = null;
+    this.archiveDirty = false;
   }
 
   selectLogo(event: FileSelectEvent): void {
@@ -204,7 +236,11 @@ export class ProjectsComponent implements OnInit {
   save(): void {
     const name = this.draft.name.trim();
     if (!name || name.length > 32 || this.saving) return;
-    const input: ProjectInput = { name, companyId: this.draft.companyId };
+    const input: ProjectInput = {
+      name,
+      companyId: this.draft.companyId,
+      archiveAfterDays: this.draft.archiveAfterDays
+    };
     const editing = this.editingProject;
     this.saving = true;
     this.saveError = '';
@@ -221,7 +257,12 @@ export class ProjectsComponent implements OnInit {
         this.projectContext.load();
         if (editing) {
           this.editingProject = project;
-          this.draft = { name: project.name, companyId: project.companyId };
+          this.draft = {
+            name: project.name,
+            companyId: project.companyId,
+            archiveAfterDays: project.archiveAfterDays
+          };
+          this.archiveDirty = false;
           this.loadMembers();
           return;
         }

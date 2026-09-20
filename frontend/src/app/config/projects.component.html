@@ -36,6 +36,26 @@
                 filterBy="name" appendTo="body" />
       <small>Il progetto può esistere anche senza una compagnia collegata.</small>
     </div>
+    <div class="form-field archive-field">
+      <label for="project-archive-days">Archiviazione automatica</label>
+      <p-inputnumber inputId="project-archive-days" name="archiveAfterDays"
+                     [ngModel]="draft.archiveAfterDays"
+                     (ngModelChange)="onArchiveDaysChange($event)"
+                     [showButtons]="true" [min]="1" [max]="3650"
+                     [disabled]="!editingProject || saving"
+                     placeholder="Disabilitata" appendTo="body" suffix=" giorni" />
+      <small>
+        Giorni di permanenza in stato “Rilasciato” dopo i quali le segnalazioni
+        vengono spostate automaticamente nell'archivio. Vuoto = archiviazione disattivata.
+        @if (editingProject && !archiveDirty) { <em>Premi "Salva archiviazione" per applicare la modifica.</em> }
+      </small>
+      @if (editingProject && archiveDirty) {
+        <div>
+          <p-button type="button" size="small" label="Salva archiviazione" icon="pi pi-check"
+                    [loading]="saving" [disabled]="saving" (onClick)="persistArchiveDays()" />
+        </div>
+      }
+    </div>
     <div class="form-field">
       <label>Logo del progetto (opzionale)</label>
       <p-fileupload mode="advanced" styleClass="app-file-upload" [multiple]="false" [customUpload]="true"
