@@ -1,0 +1,283 @@
+<p-card>
+  <div class="section-heading">
+    <div>
+      <h2>Campi ticket</h2>
+      <p>Configura i campi custom del progetto selezionato.</p>
+    </div>
+    <div class="project-picker">
+      <p-select inputId="fields-project" [options]="projects" optionLabel="name" optionValue="id"
+                [ngModel]="selectedProjectId" (ngModelChange)="selectProject($event)"
+                placeholder="Seleziona progetto" [filter]="true" filterBy="name"
+                [disabled]="projectLoading || projects.length === 0">
+        <ng-template #selectedItem let-project>
+          @if (project?.logoUrl) { <img class="project-option-logo" [src]="project.logoUrl" [alt]="project.name" /> }
+          @else { {{ project?.name }} }
+        </ng-template>
+        <ng-template #item let-project>
+          @if (project.logoUrl) { <img class="project-option-logo" [src]="project.logoUrl" [alt]="project.name" /> }
+          @else { {{ project.name }} }
+        </ng-template>
+      </p-select>
+      <p-button label="Nuovo campo" icon="pi pi-plus"
+                [disabled]="selectedProjectId === null || fieldsLoading"
+                (onClick)="showNewField()" />
+      <p-button label="Preview form" icon="pi pi-eye" severity="primary" [outlined]="true"
+                [loading]="previewLoading"
+                [disabled]="selectedProjectId === null || fieldsLoading || projectLoading || previewLoading"
+                (onClick)="openPreview()" />
+    </div>
+  </div>
+
+  @if (projectError) { <p class="form-error" role="alert">{{ projectError }}</p> }
+  @if (fieldsError) { <p class="form-error" role="alert">{{ fieldsError }}</p> }
+
+  <app-entity-table [rows]="fieldRows" [columns]="fieldColumns" [loading]="fieldsLoading || projectLoading"
+                    emptyMessage="Nessun campo configurato per questo progetto."
+                    actionLabel="Apri" actionIcon="pi pi-folder-open"
+                    secondaryActionLabel="Elimina"
+                    (refresh)="loadFields()" (rowOpen)="openField($event)"
+                    (secondaryRowAction)="confirmDeleteField($event)" />
+</p-card>
+
+@if (selectedField) {
+  <p-dialog [header]="'Dettaglio campo · ' + selectedField.label" [(visible)]="fieldDetailVisible"
+            [modal]="true" [style]="{ width: '960px', maxWidth: '96vw' }"
+            [breakpoints]="{ '720px': '96vw' }" [draggable]="false" [resizable]="false"
+            [closable]="!savingField && !savingOption && !deletingOption"
+            [closeOnEscape]="!savingField && !savingOption && !deletingOption"
+            (onHide)="closeField()">
+    <form #fieldDetailForm="ngForm" (ngSubmit)="saveField()" class="detail-field-form">
+      <div class="section-heading">
+        <div>
+          <h2>{{ selectedField.label }}</h2>
+          <p>Modifica direttamente la configurazione del campo e salva le variazioni.</p>
+        </div>
+        <div class="details-actions">
+          @if (selectedField.type === 'SELECT') {
+            <p-button type="button" label="Nuova opzione" icon="pi pi-plus" severity="secondary"
+                      [outlined]="true" (onClick)="showNewOption()" />
+          }
+          <p-button type="submit" label="Salva modifiche" icon="pi pi-save" [loading]="savingField"
+                    [disabled]="fieldDetailForm.invalid || !fieldDraft.code.trim() || !fieldDraft.label.trim() || savingField" />
+        </div>
+      </div>
+
+      <div class="fields-grid detail-fields-grid">
+        <div class="form-field">
+          <label for="detail-field-code">Codice *</label>
+          <input pInputText id="detail-field-code" name="detailCode" [(ngModel)]="fieldDraft.code"
+                 maxlength="8" required autocomplete="off" />
+          <small>Massimo 8 caratteri: A-Z, numeri e underscore.</small>
+        </div>
+        <div class="form-field">
+          <label for="detail-field-label">Etichetta *</label>
+          <input pInputText id="detail-field-label" name="detailLabel" [(ngModel)]="fieldDraft.label"
+                 maxlength="64" required />
+        </div>
+        <div class="form-field span-2">
+          <label for="detail-field-description">Descrizione</label>
+          <textarea pTextarea id="detail-field-description" name="detailDescription" rows="3"
+                    maxlength="2000" autoResize="true"
+                    [(ngModel)]="fieldDraft.description"
+                    placeholder="Descrizione del campo visibile agli utenti."></textarea>
+        </div>
+        <div class="form-field">
+          <label for="detail-field-type">Tipo *</label>
+          <p-select inputId="detail-field-type" name="detailType" [options]="typeOptions"
+                    optionLabel="label" optionValue="value" [(ngModel)]="fieldDraft.type"
+                    appendTo="body" />
+        </div>
+        <div class="form-field">
+          <label for="detail-field-scope">Scope *</label>
+          <p-select inputId="detail-field-scope" name="detailScope" [options]="scopeOptions"
+                    optionLabel="label" optionValue="value" [(ngModel)]="fieldDraft.scope"
+                    appendTo="body" />
+        </div>
+        <div class="flags-field">
+          <label class="check-row">
+            <input type="checkbox" name="detailMandatory" [(ngModel)]="fieldDraft.mandatory" />
+            <span>Obbligatorio</span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" name="detailMultiple" [(ngModel)]="fieldDraft.multiple" />
+            <span>Permette più valori</span>
+          </label>
+        </div>
+      </div>
+      @if (fieldSaveError) {
+        <p class="form-error" role="alert">{{ fieldSaveError }}</p>
+      }
+    </form>
+
+    <div class="options-heading">
+      <div>
+        <h3>Opzioni</h3>
+        @if (selectedField.type === 'SELECT') {
+          <p>Valori disponibili nel campo di selezione.</p>
+        }
+      </div>
+    </div>
+
+    @if (selectedField.type !== 'SELECT') {
+      <p class="empty-details">Le opzioni sono disponibili solo per i campi di tipo Selezione.</p>
+    } @else {
+      @if (optionsError) { <p class="form-error" role="alert">{{ optionsError }}</p> }
+      <p-table [value]="options" [loading]="optionsLoading" styleClass="p-datatable-sm options-table"
+               [tableStyle]="{ 'min-width': '36rem' }">
+        <ng-template #header>
+          <tr>
+            <th>Valore</th>
+            <th>Etichetta</th>
+            <th>Stato</th>
+            <th class="action-column">Azioni</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-option>
+          <tr>
+            <td>{{ option.value }}</td>
+            <td>{{ option.label }}</td>
+            <td>{{ option.active ? 'Attiva' : 'Disattivata' }}</td>
+            <td class="action-column">
+              <div class="row-actions">
+                <p-button label="Modifica" icon="pi pi-pencil" size="small" [outlined]="true"
+                          (onClick)="editOption(option)" />
+                <p-button label="Elimina" icon="pi pi-trash" size="small" severity="danger" [outlined]="true"
+                          (onClick)="confirmDeleteOption(option)" />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr><td colspan="4">Nessuna opzione configurata.</td></tr>
+        </ng-template>
+      </p-table>
+
+      @if (optionFormVisible) {
+        <form #optionForm="ngForm" (ngSubmit)="saveOption()" class="option-form">
+          <h3>{{ editingOption ? 'Modifica opzione' : 'Nuova opzione' }}</h3>
+          <div class="option-grid">
+            <div class="form-field">
+              <label for="option-value">Valore *</label>
+              <input pInputText id="option-value" name="value" [(ngModel)]="optionDraft.value"
+                     maxlength="64" required />
+            </div>
+            <div class="form-field">
+              <label for="option-label">Etichetta *</label>
+              <input pInputText id="option-label" name="label" [(ngModel)]="optionDraft.label"
+                     maxlength="64" required />
+            </div>
+            <label class="check-row option-active">
+              <input type="checkbox" name="active" [(ngModel)]="optionDraft.active" />
+              <span>Attiva</span>
+            </label>
+          </div>
+          @if (optionSaveError) { <p class="form-error" role="alert">{{ optionSaveError }}</p> }
+          <div class="dialog-actions">
+            <p-button label="Annulla" severity="secondary" [outlined]="true" type="button"
+                      [disabled]="savingOption" (onClick)="optionFormVisible = false" />
+            <p-button [label]="editingOption ? 'Salva opzione' : 'Crea opzione'" icon="pi pi-check"
+                      type="submit" [loading]="savingOption"
+                      [disabled]="optionForm.invalid || !optionDraft.value.trim() || !optionDraft.label.trim() || savingOption" />
+          </div>
+        </form>
+      }
+    }
+  </p-dialog>
+}
+
+<p-dialog header="Nuovo campo" [(visible)]="fieldFormVisible"
+          [modal]="true" [style]="{ width: '720px', maxWidth: '96vw' }"
+          [breakpoints]="{ '720px': '96vw' }" [draggable]="false" [resizable]="false"
+          [closable]="!savingField" [closeOnEscape]="!savingField" (onHide)="closeFieldForm()">
+  <form #fieldForm="ngForm" (ngSubmit)="saveField()" class="field-form dialog-field-form">
+    <div class="fields-grid">
+      <div class="form-field">
+        <label for="field-code">Codice *</label>
+        <input pInputText id="field-code" name="code" [(ngModel)]="fieldDraft.code"
+               maxlength="8" required autocomplete="off" />
+        <small>Massimo 8 caratteri: A-Z, numeri e underscore.</small>
+      </div>
+      <div class="form-field">
+        <label for="field-label">Etichetta *</label>
+        <input pInputText id="field-label" name="label" [(ngModel)]="fieldDraft.label"
+               maxlength="64" required />
+      </div>
+      <div class="form-field span-2">
+        <label for="field-description">Descrizione</label>
+        <textarea pTextarea id="field-description" name="description" rows="3"
+                  maxlength="2000" autoResize="true"
+                  [(ngModel)]="fieldDraft.description"
+                  placeholder="Descrizione del campo visibile agli utenti."></textarea>
+      </div>
+      <div class="form-field">
+        <label for="field-type">Tipo *</label>
+        <p-select inputId="field-type" name="type" [options]="typeOptions"
+                  optionLabel="label" optionValue="value" [(ngModel)]="fieldDraft.type"
+                  appendTo="body" />
+      </div>
+      <div class="form-field">
+        <label for="field-scope">Scope *</label>
+        <p-select inputId="field-scope" name="scope" [options]="scopeOptions"
+                  optionLabel="label" optionValue="value" [(ngModel)]="fieldDraft.scope"
+                  appendTo="body" />
+      </div>
+      <div class="flags-field">
+        <label class="check-row">
+          <input type="checkbox" name="mandatory" [(ngModel)]="fieldDraft.mandatory" />
+          <span>Obbligatorio</span>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" name="multiple" [(ngModel)]="fieldDraft.multiple" />
+          <span>Permette più valori</span>
+        </label>
+      </div>
+    </div>
+    @if (fieldSaveError) { <p class="form-error" role="alert">{{ fieldSaveError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" type="button"
+                [disabled]="savingField" (onClick)="fieldFormVisible = false" />
+      <p-button label="Crea campo" icon="pi pi-check"
+                type="submit" [loading]="savingField"
+                [disabled]="fieldForm.invalid || !fieldDraft.code.trim() || !fieldDraft.label.trim() || savingField" />
+    </div>
+  </form>
+</p-dialog>
+
+<p-dialog header="Elimina campo" [(visible)]="deleteFieldVisible" [modal]="true"
+          [style]="{ width: '460px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false"
+          [closable]="!deletingField" [closeOnEscape]="!deletingField">
+  @if (fieldToDelete) {
+    <p>Vuoi eliminare il campo <strong>{{ fieldToDelete.label }}</strong>?</p>
+    <p>Verranno eliminate anche le sue opzioni. Se il campo è usato da issue esistenti, l’operazione può fallire.</p>
+    @if (deleteFieldError) { <p class="form-error" role="alert">{{ deleteFieldError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" [disabled]="deletingField"
+                (onClick)="deleteFieldVisible = false" />
+      <p-button label="Elimina campo" icon="pi pi-trash" severity="danger" [loading]="deletingField"
+                (onClick)="deleteField()" />
+    </div>
+  }
+</p-dialog>
+
+<p-dialog [header]="'Preview issue form · ' + selectedProjectName()" [(visible)]="previewVisible"
+          [modal]="true" [style]="{ width: '860px', maxWidth: '96vw' }"
+          [breakpoints]="{ '720px': '96vw' }" [draggable]="false" [resizable]="false">
+  <app-issue-form [model]="previewModel" [fields]="previewFields()" [optionsByField]="previewOptions"
+                  formTitle="Form USER" />
+</p-dialog>
+
+<p-dialog header="Elimina opzione" [(visible)]="deleteOptionVisible" [modal]="true"
+          [style]="{ width: '440px', maxWidth: '95vw' }" [draggable]="false" [resizable]="false"
+          [closable]="!deletingOption" [closeOnEscape]="!deletingOption">
+  @if (optionToDelete) {
+    <p>Vuoi eliminare l’opzione <strong>{{ optionToDelete.label }}</strong>?</p>
+    <p>Se è già usata in una issue, disattivala invece di eliminarla.</p>
+    @if (deleteOptionError) { <p class="form-error" role="alert">{{ deleteOptionError }}</p> }
+    <div class="dialog-actions">
+      <p-button label="Annulla" severity="secondary" [outlined]="true" [disabled]="deletingOption"
+                (onClick)="deleteOptionVisible = false" />
+      <p-button label="Elimina opzione" icon="pi pi-trash" severity="danger" [loading]="deletingOption"
+                (onClick)="deleteOption()" />
+    </div>
+  }
+</p-dialog>

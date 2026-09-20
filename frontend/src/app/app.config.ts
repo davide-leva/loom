@@ -4,8 +4,8 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { provideRouter } from '@angular/router';
 import { providePrimeNG } from 'primeng/config';
 import { routes } from './app.routes';
-import { authFailureInterceptor } from './auth-failure.interceptor';
-import { theme } from './app.theme';
+import { authFailureInterceptor } from './services/auth/auth-failure.interceptor';
+import { theme } from './shared/app-theme';
 
 export const appConfig: ApplicationConfig = {
   providers: [

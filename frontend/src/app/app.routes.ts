@@ -1,13 +1,13 @@
 import { inject } from '@angular/core';
 import { Routes, Router } from '@angular/router';
 import { catchError, map, of, switchMap } from 'rxjs';
-import { AuthService } from './auth.service';
-import { LoginComponent } from './login.component';
-import { MainLayoutComponent } from './main-layout.component';
-import { SetupService } from './setup.service';
+import { LoginComponent } from './components/login/login.component';
+import { MainLayoutComponent } from './components/main-layout/main-layout.component';
+import { AuthService } from './services/auth/auth.service';
+import { SetupService } from './services/setup/setup.service';
 
 export const routes: Routes = [
-  { path: 'setup', loadComponent: () => import('./setup.component').then(module => module.SetupComponent) },
+  { path: 'setup', loadComponent: () => import('./components/setup/setup.component').then(module => module.SetupComponent) },
   { path: 'login', component: LoginComponent },
   {
     path: '',
@@ -25,33 +25,33 @@ export const routes: Routes = [
     }],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
-      { path: 'dashboard', loadComponent: () => import('./home.component').then(module => module.HomeComponent) },
-      { path: 'eventi', loadComponent: () => import('./events.component').then(module => module.EventsComponent),
+      { path: 'dashboard', loadComponent: () => import('./components/home/home.component').then(module => module.HomeComponent) },
+      { path: 'eventi', loadComponent: () => import('./components/events/events.component').then(module => module.EventsComponent),
         canActivate: [() => ['ADMIN', 'TEAM'].includes(inject(AuthService).user()?.role ?? '')
           ? true : inject(Router).createUrlTree(['/dashboard'])] },
-      { path: 'preferenze-email', loadComponent: () => import('./email-preferences.component').then(module => module.EmailPreferencesComponent) },
-      { path: 'anomalie', loadComponent: () => import('./issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Anomalie', issueType: 'ANOMALY' } },
-      { path: 'migliorie', loadComponent: () => import('./issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Migliorie', issueType: 'IMPROVEMENT' } },
-      { path: 'implementazioni', loadComponent: () => import('./issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Implementazioni', issueType: 'IMPLEMENTATION' } },
+      { path: 'preferenze-email', loadComponent: () => import('./components/email-preferences/email-preferences.component').then(module => module.EmailPreferencesComponent) },
+      { path: 'anomalie', loadComponent: () => import('./components/issue-board/issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Anomalie', issueType: 'ANOMALY' } },
+      { path: 'migliorie', loadComponent: () => import('./components/issue-board/issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Migliorie', issueType: 'IMPROVEMENT' } },
+      { path: 'implementazioni', loadComponent: () => import('./components/issue-board/issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Implementazioni', issueType: 'IMPLEMENTATION' } },
       {
         path: 'pianificazione',
-        loadComponent: () => import('./planning.component').then(module => module.PlanningComponent),
+        loadComponent: () => import('./components/planning/planning.component').then(module => module.PlanningComponent),
         canActivate: [() => inject(AuthService).user()?.role === 'ADMIN'
           ? true : inject(Router).createUrlTree(['/dashboard'])]
       },
       {
         path: 'eliminate',
-        loadComponent: () => import('./deleted-issues.component').then(module => module.DeletedIssuesComponent),
+        loadComponent: () => import('./components/deleted-issues/deleted-issues.component').then(module => module.DeletedIssuesComponent),
         canActivate: [() => inject(AuthService).user()?.role === 'ADMIN'
           ? true : inject(Router).createUrlTree(['/dashboard'])]
       },
       {
         path: 'archivio',
-        loadComponent: () => import('./archived-issues.component').then(module => module.ArchivedIssuesComponent)
+        loadComponent: () => import('./components/archived-issues/archived-issues.component').then(module => module.ArchivedIssuesComponent)
       },
       {
         path: 'configurazione',
-        loadComponent: () => import('./config/configuration-layout.component')
+        loadComponent: () => import('./components/config/configuration-layout/configuration-layout.component')
           .then(module => module.ConfigurationLayoutComponent),
         canActivate: [() => inject(AuthService).user()?.role === 'ADMIN'
           ? true : inject(Router).createUrlTree(['/dashboard'])],
@@ -59,24 +59,24 @@ export const routes: Routes = [
           { path: '', pathMatch: 'full', redirectTo: 'compagnie' },
           {
             path: 'progetti',
-            loadComponent: () => import('./config/projects.component').then(module => module.ProjectsComponent)
+            loadComponent: () => import('./components/config/projects/projects.component').then(module => module.ProjectsComponent)
           },
           {
             path: 'compagnie',
-            loadComponent: () => import('./config/companies.component').then(module => module.CompaniesComponent)
+            loadComponent: () => import('./components/config/companies/companies.component').then(module => module.CompaniesComponent)
           },
           {
             path: 'team-users',
-            loadComponent: () => import('./config/team-users.component').then(module => module.TeamUsersComponent)
+            loadComponent: () => import('./components/config/team-users/team-users.component').then(module => module.TeamUsersComponent)
           },
           {
             path: 'campi-ticket',
-            loadComponent: () => import('./config/ticket-fields.component')
+            loadComponent: () => import('./components/config/ticket-fields/ticket-fields.component')
               .then(module => module.TicketFieldsComponent)
           },
           {
             path: 'autenticazione-esterna',
-            loadComponent: () => import('./config/external-auth.component')
+            loadComponent: () => import('./components/config/external-auth/external-auth.component')
               .then(module => module.ExternalAuthComponent)
           }
         ]
