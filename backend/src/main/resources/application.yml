@@ -39,6 +39,12 @@ app:
       enabled: ${MAIL_NOTIFICATIONS_ENABLED:false}
       from: ${MAIL_FROM:no-reply@tickets.local}
       scheduler-delay: ${MAIL_NOTIFICATIONS_DELAY:5m}
+      # Events must be at least this old before their digest is sent. Default 5 minutes —
+      # gives authors a brief grace window to back out a recent change before it reaches
+      # inboxes. Supports both ISO-8601 (PT5M) and Spring's short form (5m).
+      min-event-age: ${MAIL_NOTIFICATIONS_MIN_AGE:5m}
+      # Notifications older than this are dropped without sending.
+      digest-window: ${MAIL_NOTIFICATIONS_DIGEST_WINDOW:48h}
 
   archive:
     enabled: ${ARCHIVE_ENABLED:true}

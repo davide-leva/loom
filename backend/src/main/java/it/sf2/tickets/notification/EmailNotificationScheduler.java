@@ -1,25 +1,48 @@
 package it.sf2.tickets.notification;
 
 import it.sf2.tickets.controller.BrandingService;
+import it.sf2.tickets.domain.Event;
+import it.sf2.tickets.domain.EventType;
 import it.sf2.tickets.domain.EventUserNotification;
+import it.sf2.tickets.domain.User;
 import it.sf2.tickets.repository.CompanyRepository;
 import it.sf2.tickets.repository.EventUserNotificationRepository;
+import it.sf2.tickets.repository.UserRepository;
 import jakarta.mail.MessagingException;
 import java.io.File;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Digest-style email dispatcher.
+ *
+ * <p>Each scheduler tick loads all undelivered {@link EventUserNotification}s, groups
+ * them by user, and asks {@link EventDigestService} to collapse the raw event stream
+ * into a single per-user {@link EmailDigest}. One email is sent per user, not one per
+ * event.
+ *
+ * <p><b>Throttling:</b> if any of the events for a user is younger than
+ * {@code app.notifications.email.min-event-age} (default 5 minutes), that user's
+ * digest is skipped this tick. The events stay {@code notified=false} so the next
+ * scheduled run retries — this gives authors a brief grace window to back out or
+ * amend a recent change before it reaches inboxes.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -29,9 +52,23 @@ public class EmailNotificationScheduler {
     private final JavaMailSender mailSender;
     private final CompanyRepository companies;
     private final BrandingService branding;
+    private final EventDigestService digestService;
+    private final UserRepository users;
 
     @Value("${app.notifications.email.from}")
     private String from;
+
+    /**
+     * Minimum age an event must reach before its digest is sent. Defaults to 5 minutes.
+     * Configurable via {@code app.notifications.email.min-event-age} (ISO-8601 duration
+     * such as {@code PT5M} or Spring's short form {@code 5m}).
+     */
+    @Value("${app.notifications.email.min-event-age:5m}")
+    private Duration minEventAge;
+
+    /** Notifications older than this are dropped without sending. Defaults to 48h. */
+    @Value("${app.notifications.email.digest-window:48h}")
+    private Duration digestWindow;
 
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
@@ -42,45 +79,81 @@ public class EmailNotificationScheduler {
     @Scheduled(fixedDelayString = "${app.notifications.email.scheduler-delay}", initialDelayString = "${app.notifications.email.scheduler-delay}")
     @Transactional
     public void sendPendingNotifications() {
-        Instant after = Instant.now().minusSeconds(2 * 24 * 60 * 60);
-        var pending = notifications.findByNotifiedFalseAndEvent_EventDateAfterOrderByEvent_EventDateAsc(after);
-        log.info("Email notification scan started: pending={}", pending.size());
-        pending.forEach(this::sendOne);
-        log.info("Email notification scan completed");
+        Instant since = Instant.now().minus(digestWindow);
+        List<EventUserNotification> pending =
+            notifications.findByNotifiedFalseAndEvent_EventDateAfterOrderByEvent_EventDateAsc(since);
+        if (pending.isEmpty()) return;
+
+        Map<Long, List<EventUserNotification>> byUser = pending.stream()
+            .collect(Collectors.groupingBy(n -> n.getUser().getId()));
+        log.info("Email digest scan started: users={} notifications={}", byUser.size(), pending.size());
+
+        int sent = 0;
+        int deferred = 0;
+        int skipped = 0;
+        for (Map.Entry<Long, List<EventUserNotification>> entry : byUser.entrySet()) {
+            User user = entry.getValue().get(0).getUser();
+            // Eagerly load user — the collection above holds the proxy.
+            user = users.findById(user.getId()).orElse(user);
+            List<Event> events = entry.getValue().stream()
+                .map(EventUserNotification::getEvent)
+                .sorted(Comparator.comparingLong(Event::getId))
+                .toList();
+            Instant youngest = events.stream().map(Event::getEventDate).max(Comparator.naturalOrder()).orElse(Instant.now());
+
+            if (youngest.isAfter(Instant.now().minus(minEventAge))) {
+                // Keep notified=false and skip; the next tick will retry.
+                deferred++;
+                log.debug("Email digest deferred: user={} youngestEvent={} minAge={}",
+                    user.getId(), youngest, minEventAge);
+                continue;
+            }
+
+            EmailDigest digest = digestService.buildDigest(user, events);
+            if (digest == null) {
+                // Nothing visible after collapsing/permission filtering — mark these as
+                // delivered so we don't re-evaluate them on every tick.
+                entry.getValue().forEach(this::markNotified);
+                skipped++;
+                continue;
+            }
+
+            try {
+                sendDigest(digest);
+                entry.getValue().forEach(this::markNotified);
+                sent++;
+                log.info("Email digest sent: user={} issues={} window={}..{}",
+                    user.getId(), digest.issues().size(), digest.oldestEvent(), digest.newestEvent());
+            } catch (RuntimeException | MessagingException exception) {
+                log.warn("Email digest failed: user={} reason={}", user.getId(), exception.getMessage(), exception);
+                // Keep notified=false so the next scheduled run retries.
+            }
+        }
+        log.info("Email digest scan completed: sent={} deferred={} skipped={}", sent, deferred, skipped);
     }
 
-    private void sendOne(EventUserNotification notification) {
-        if (notification.getUser().getEmail() == null || notification.getUser().getEmail().isBlank()) {
-            log.info("Skipping notification event={} user={} because email is empty",
-                notification.getEvent().getId(), notification.getUser().getId());
-            markNotified(notification);
+    private void sendDigest(EmailDigest digest) throws MessagingException {
+        if (digest.user().email() == null || digest.user().email().isBlank()) {
+            log.info("Skipping digest for user={} because email is empty", digest.user().id());
             return;
         }
-        try {
-            var message = mailSender.createMimeMessage();
-            var helper = new MimeMessageHelper(message, true, "UTF-8");
-            var internal = companies.findFirstByTeamCompanyTrue().orElse(null);
-            String brandName = internal == null ? "Tickets" : internal.getName();
-            var storedLogo = internal == null ? null
-                : branding.logoPath("companies", internal.getId(), internal.getLogoExtension());
-            File logo = storedLogo == null ? null : storedLogo.toFile();
-            helper.setFrom(from);
-            helper.setTo(notification.getUser().getEmail());
-            helper.setSubject(brandName + " · " + titleFor(notification.getEvent().getType()));
-            helper.setText(htmlBody(notification, brandName, logo != null && logo.isFile()), true);
-            if (logo != null && logo.isFile()) {
-                helper.addInline("internal-logo", new FileSystemResource(logo));
-            }
-            mailSender.send(message);
-            markNotified(notification);
-            log.info("Email notification sent: event={} user={} to={}",
-                notification.getEvent().getId(), notification.getUser().getId(), notification.getUser().getEmail());
-        } catch (MessagingException | RuntimeException exception) {
-            log.warn("Email notification failed: event={} user={} to={} reason={}",
-                notification.getEvent().getId(), notification.getUser().getId(), notification.getUser().getEmail(),
-                exception.getMessage(), exception);
-            // Keep notified=false so the next scheduled run retries.
+        var internal = companies.findFirstByTeamCompanyTrue().orElse(null);
+        String brandName = internal == null ? "Tickets" : internal.getName();
+        var storedLogo = internal == null ? null
+            : branding.logoPath("companies", internal.getId(), internal.getLogoExtension());
+        File logo = storedLogo == null ? null : storedLogo.toFile();
+        boolean hasLogo = logo != null && logo.isFile();
+
+        var message = mailSender.createMimeMessage();
+        var helper = new MimeMessageHelper(message, true, "UTF-8");
+        helper.setFrom(from);
+        helper.setTo(digest.user().email());
+        helper.setSubject(brandName + " · " + subjectFor(digest));
+        helper.setText(htmlBody(digest, brandName, hasLogo), true);
+        if (hasLogo) {
+            helper.addInline("internal-logo", new FileSystemResource(logo));
         }
+        mailSender.send(message);
     }
 
     private void markNotified(EventUserNotification notification) {
@@ -88,119 +161,106 @@ public class EmailNotificationScheduler {
         notification.setNotifiedAt(Instant.now());
     }
 
-    private static String htmlBody(EventUserNotification notification, String brandName, boolean hasLogo) {
-        var event = notification.getEvent();
-        String title = titleFor(event.getType());
-        String explanation = explanationFor(event.getType(), event.getData());
-        String issueTitle = event.getIssue() == null ? "" : event.getIssue().getTitle();
-        String projectName = event.getProject() == null ? "" : event.getProject().getName();
-        String issueMeta = issueMetaHtml(event.getIssue());
+    private static String subjectFor(EmailDigest digest) {
+        int count = digest.issues().size();
+        if (count == 1) return digest.issues().get(0).title() + " · 1 segnalazione aggiornata";
+        return count + " segnalazioni aggiornate";
+    }
+
+    private static String htmlBody(EmailDigest digest, String brandName, boolean hasLogo) {
         String logoMarkup = hasLogo
             ? "<img src=\"cid:internal-logo\" alt=\"" + escape(brandName) + "\" style=\"height:46px\" />"
             : "";
+        StringBuilder rows = new StringBuilder();
+        for (EmailDigest.IssueDigest issue : digest.issues()) {
+            rows.append(issueRow(issue));
+        }
+        String recipient = digest.user().fullName() == null ? "" : escape(digest.user().fullName());
         return """
-            <div style=\"font-family:Poppins,Arial,sans-serif;background:#f8fafc;padding:28px;color:#0f172a\">
-              <div style=\"max-width:760px;margin:auto;background:#fff;border:1px solid #dbe7f3;border-radius:18px;overflow:hidden\">
-                <div style=\"padding:22px 26px;background:#eef5fc;display:flex;align-items:center;gap:14px\">
+            <div style="font-family:Poppins,Arial,sans-serif;background:#f8fafc;padding:28px;color:#0f172a">
+              <div style="max-width:760px;margin:auto;background:#fff;border:1px solid #dbe7f3;border-radius:18px;overflow:hidden">
+                <div style="padding:22px 26px;background:#eef5fc;display:flex;align-items:center;gap:14px">
                   %s
-                  <div style=\"font-size:13px;color:#0f477e;font-weight:700;letter-spacing:.08em;text-transform:uppercase\">%s</div>
+                  <div style="font-size:13px;color:#0f477e;font-weight:700;letter-spacing:.08em;text-transform:uppercase">%s</div>
                 </div>
-                <div style=\"padding:26px\">
-                  <h1 style=\"margin:0 0 10px;color:#0f477e;font-size:24px\">%s</h1>
-                  <p style=\"margin:0 0 18px;color:#334155;line-height:1.5\">%s</p>
-                  <div style=\"border:1px solid #e2e8f0;border-radius:14px;padding:16px;background:#fbfdff;margin-bottom:18px\">
-                    <p style=\"margin:0 0 8px\"><strong>Progetto:</strong> %s</p>
-                    <p style=\"margin:0 0 8px\"><strong>Segnalazione:</strong> #%s %s</p>
+                <div style="padding:26px">
+                  <h1 style="margin:0 0 6px;color:#0f477e;font-size:22px">Ciao %s, ecco le novità</h1>
+                  <p style="margin:0 0 18px;color:#334155;line-height:1.5">Le segnalazioni qui sotto hanno avuto attività tra %s e %s.</p>
+                  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%%;border-collapse:collapse">
                     %s
-                    <p style=\"margin:0\"><strong>Data evento:</strong> %s</p>
-                  </div>
-                  <p style=\"margin:0;color:#64748b;font-size:13px\">Ricevi questa email perché hai attivato le notifiche per questa comunicazione o per questo progetto. Puoi modificare le preferenze dal menu utente, sezione Notifiche email.</p>
+                  </table>
+                  <p style="margin:18px 0 0;color:#64748b;font-size:13px">Ricevi questa email perché hai attivato le notifiche per queste comunicazioni. Puoi modificare le preferenze dal menu utente, sezione Notifiche email.</p>
                 </div>
               </div>
             </div>
-            """.formatted(logoMarkup, escape(brandName), escape(title), escape(explanation), escape(projectName),
-            event.getIssue() == null ? "" : event.getIssue().getId(), escape(issueTitle), issueMeta, event.getEventDate());
+            """.formatted(logoMarkup, escape(brandName), recipient,
+            escape(formatTimestamp(digest.oldestEvent())),
+            escape(formatTimestamp(digest.newestEvent())),
+            rows);
     }
 
-    private static String issueMetaHtml(it.sf2.tickets.domain.Issue issue) {
-        if (issue == null) return "";
-        String type = issue.getIssueType() == null ? "Non classificata" : typeLabel(issue.getIssueType().name());
-        String status = issue.getStatus() == null ? "" : statusLabel(issue.getStatus().name());
+    private static String issueRow(EmailDigest.IssueDigest issue) {
+        StringBuilder items = new StringBuilder();
+        for (EmailDigest.DigestItem item : issue.items()) {
+            items.append("<li style=\"margin:0 0 4px\">").append(itemLine(item)).append("</li>");
+        }
         return """
-                    <p style=\"margin:0 0 8px\"><strong>Tipologia:</strong> %s</p>
-                    <p style=\"margin:0 0 8px\"><strong>Stato:</strong> %s</p>
-            """.formatted(escape(type), escape(status));
+            <tr><td style="padding:14px 0;border-top:1px solid #e2e8f0">
+              <div style="font-weight:600;color:#0f172a">%s · #%d %s%s</div>
+              <ul style="margin:6px 0 0 18px;color:#334155;font-size:14px;line-height:1.5;padding:0">%s</ul>
+            </td></tr>
+            """.formatted(escape(issue.projectName()), issue.id(),
+            escape(issue.title()), issue.internal() ? " <span style=\"color:#0f477e;font-size:12px\">(interna)</span>" : "",
+            items);
     }
 
-    private static String titleFor(it.sf2.tickets.domain.EventType type) {
-        return switch (type) {
-            case ISSUE_CREATED -> "Nuova segnalazione";
-            case ISSUE_PLANNED -> "Segnalazione pianificata";
-            case ISSUE_STATUS_CHANGED -> "Stato aggiornato";
-            case ISSUE_APPROVED -> "Segnalazione approvata";
-            case ISSUE_COMMENT_ADDED -> "Nuovo commento";
-            case ISSUE_COMMENT_DELETED -> "Commento eliminato";
-            case ISSUE_ATTACHMENT_UPLOADED -> "Nuovo allegato";
-            case ISSUE_VALUES_CHANGED -> "Campi aggiornati";
-            case ISSUE_DELETED -> "Segnalazione eliminata";
-            case ISSUE_ARCHIVED -> "Segnalazione archiviata";
-        };
+    private static String itemLine(EmailDigest.DigestItem item) {
+        if (item instanceof EmailDigest.StatusTransition transition) {
+            return "Stato: <strong>" + escape(transition.from()) + " → " + escape(transition.to()) + "</strong>";
+        }
+        if (item instanceof EmailDigest.CommentsAdded c) {
+            return c.count() == 1 ? "1 nuovo commento" : c.count() + " nuovi commenti";
+        }
+        if (item instanceof EmailDigest.AttachmentsAdded a) {
+            return a.count() == 1 ? "1 nuovo allegato" : a.count() + " nuovi allegati";
+        }
+        if (item instanceof EmailDigest.ValuesChanged) {
+            return "Campi aggiornati";
+        }
+        if (item instanceof EmailDigest.Created) {
+            return "Nuova segnalazione";
+        }
+        if (item instanceof EmailDigest.Planned) {
+            return "Segnalazione pianificata";
+        }
+        if (item instanceof EmailDigest.Approved) {
+            return "Segnalazione approvata";
+        }
+        if (item instanceof EmailDigest.Archived) {
+            return "Segnalazione archiviata";
+        }
+        return "";
     }
 
-    private static String explanationFor(it.sf2.tickets.domain.EventType type, String data) {
-        String detail = humanizeEventData(data);
-        return switch (type) {
-            case ISSUE_CREATED -> "È stata creata una nuova segnalazione nel progetto. Puoi aprire l’applicazione per leggerne i dettagli, verificare gli allegati e seguire l’avanzamento.";
-            case ISSUE_PLANNED -> appendDetail("La segnalazione è stata classificata e inserita nel flusso di lavoro.", detail);
-            case ISSUE_STATUS_CHANGED -> appendDetail("Lo stato della segnalazione è stato aggiornato. La modifica è già visibile nella dashboard e nella kanban del progetto.", detail);
-            case ISSUE_APPROVED -> "Un superuser ha approvato la segnalazione rilasciata. La richiesta è quindi chiusa dal punto di vista del cliente.";
-            case ISSUE_COMMENT_ADDED -> "È stato aggiunto un nuovo commento alla segnalazione. Apri il dettaglio issue per leggere la conversazione completa e rispondere se serve.";
-            case ISSUE_COMMENT_DELETED -> "Un commento è stato eliminato dalla segnalazione.";
-            case ISSUE_ATTACHMENT_UPLOADED -> appendDetail("È stato caricato un nuovo allegato. L’allegato è disponibile nel dettaglio della segnalazione.", detail);
-            case ISSUE_VALUES_CHANGED -> "I campi della segnalazione sono stati aggiornati.";
-            case ISSUE_DELETED -> "La segnalazione è stata eliminata. Questa comunicazione resta come traccia dell’operazione eseguita.";
-            case ISSUE_ARCHIVED -> "La segnalazione è stata archiviata automaticamente perché è trascorso il periodo di mantenimento configurato per il progetto. È ancora consultabile dalla sezione Archiviate.";
-        };
-    }
-
-    private static String humanizeEventData(String data) {
-        if (data == null || data.isBlank()) return "";
-        return data.trim()
-            .replace("REPORTED", statusLabel("REPORTED"))
-            .replace("IN_PROGRESS", statusLabel("IN_PROGRESS"))
-            .replace("COMPLETED", statusLabel("COMPLETED"))
-            .replace("RELEASED", statusLabel("RELEASED"))
-            .replace("APPROVED", statusLabel("APPROVED"))
-            .replace("ANOMALY", typeLabel("ANOMALY"))
-            .replace("IMPROVEMENT", typeLabel("IMPROVEMENT"))
-            .replace("IMPLEMENTATION", typeLabel("IMPLEMENTATION"));
-    }
-
-    private static String statusLabel(String status) {
-        return switch (status) {
-            case "REPORTED" -> "Segnalato";
-            case "IN_PROGRESS" -> "In lavorazione";
-            case "COMPLETED" -> "Completato";
-            case "RELEASED" -> "Rilasciato";
-            case "APPROVED" -> "Approvato";
-            default -> status;
-        };
-    }
-
-    private static String typeLabel(String type) {
-        return switch (type) {
-            case "ANOMALY" -> "Anomalia";
-            case "IMPROVEMENT" -> "Miglioria";
-            case "IMPLEMENTATION" -> "Implementazione";
-            default -> type;
-        };
-    }
-
-    private static String appendDetail(String text, String detail) {
-        return detail.isBlank() ? text : text + " " + detail;
+    private static String formatTimestamp(Instant instant) {
+        if (instant == null) return "";
+        return EventType.ISSUE_CREATED.name() + " " + instant.toString();
     }
 
     private static String escape(String value) {
         return value == null ? "" : value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
+
+    /** Exposed for unit tests so they can call the digest send path directly. */
+    void setMinEventAge(Duration minEventAge) {
+        this.minEventAge = minEventAge;
+    }
+
+    void setDigestWindow(Duration digestWindow) {
+        this.digestWindow = digestWindow;
+    }
+
+    /** Used by tests to inspect the deferred count. */
+    int lastDeferredCount() { return lastDeferred; }
+    private int lastDeferred;
 }
