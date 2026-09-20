@@ -74,11 +74,23 @@ public class Issue {
     @Column(name = "is_internal", nullable = false)
     private boolean internal;
 
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
     public Issue(Project project, String title, String description, IssueType issueType) {
         this.project = project;
         this.title = title;
         this.description = description;
         this.issueType = issueType;
     }
+
+    public boolean isDeleted()  { return deletedAt  != null; }
+    public boolean isArchived() { return archivedAt != null; }
+
+    public void markDeleted(Instant at)  { this.deletedAt  = at; }
+    public void markArchived(Instant at) { this.archivedAt = at; }
 
 }

@@ -30,6 +30,55 @@ describe('filterIssues', () => {
       to: new Date('2026-09-18T00:00:00')
     }).map(item => item.id), [2]);
   });
+
+  it('excludes soft-deleted and archived issues by default', () => {
+    const deleted = issue({ id: 4, title: 'Eliminata', status: 'REPORTED', issueType: null,
+                            createdAt: '2026-09-19T11:00:00.000Z', deletedAt: '2026-09-19T12:00:00.000Z' });
+    const archived = issue({ id: 5, title: 'Archiviata', status: 'RELEASED', issueType: null,
+                             createdAt: '2026-09-15T11:00:00.000Z', archivedAt: '2026-09-19T12:00:00.000Z' });
+    // Input order is preserved; soft-deleted and archived rows are removed.
+    assert.deepEqual(filterIssues([...issues, deleted, archived], {}).map(item => item.id), [1, 2, 3]);
+  });
+
+  it('returns deleted issues when excludeDeleted is false', () => {
+    const deleted = issue({ id: 4, title: 'Eliminata', status: 'REPORTED', issueType: null,
+                            createdAt: '2026-09-19T11:00:00.000Z', deletedAt: '2026-09-19T12:00:00.000Z' });
+    assert.deepEqual(filterIssues([deleted], { excludeDeleted: false }).map(item => item.id), [4]);
+  });
+
+  it('returns archived issues when excludeArchived is false', () => {
+    const archived = issue({ id: 5, title: 'Archiviata', status: 'RELEASED', issueType: null,
+                             createdAt: '2026-09-15T11:00:00.000Z', archivedAt: '2026-09-19T12:00:00.000Z' });
+    assert.deepEqual(filterIssues([archived], { excludeArchived: false }).map(item => item.id), [5]);
+  });
+
+  it('filters issues by select field values with OR logic inside a field', () => {
+    const a = issue({ id: 1, title: 'A', status: 'REPORTED', issueType: null,
+                      createdAt: '2026-09-19T10:00:00.000Z', selectValues: { 10: ['LOW'] } });
+    const b = issue({ id: 2, title: 'B', status: 'REPORTED', issueType: null,
+                      createdAt: '2026-09-19T11:00:00.000Z', selectValues: { 10: ['HIGH'] } });
+    const c = issue({ id: 3, title: 'C', status: 'REPORTED', issueType: null,
+                      createdAt: '2026-09-19T12:00:00.000Z', selectValues: { 10: ['MEDIUM'] } });
+    assert.deepEqual(filterIssues([a, b, c], { selectValues: { 10: ['LOW', 'HIGH'] } }).map(i => i.id), [1, 2]);
+  });
+
+  it('excludes issues missing the select value when filter is NONE', () => {
+    const withValue = issue({ id: 1, title: 'A', status: 'REPORTED', issueType: null,
+                              createdAt: '2026-09-19T10:00:00.000Z', selectValues: { 10: ['LOW'] } });
+    const withoutValue = issue({ id: 2, title: 'B', status: 'REPORTED', issueType: null,
+                                 createdAt: '2026-09-19T11:00:00.000Z', selectValues: {} });
+    assert.deepEqual(filterIssues([withValue, withoutValue], { selectValues: { 10: 'NONE' } }).map(i => i.id), [2]);
+  });
+
+  it('AND-combines multiple select-field filters', () => {
+    const a = issue({ id: 1, title: 'A', status: 'REPORTED', issueType: null,
+                      createdAt: '2026-09-19T10:00:00.000Z', selectValues: { 10: ['LOW'], 20: ['BUG'] } });
+    const b = issue({ id: 2, title: 'B', status: 'REPORTED', issueType: null,
+                      createdAt: '2026-09-19T11:00:00.000Z', selectValues: { 10: ['LOW'], 20: ['FEATURE'] } });
+    const c = issue({ id: 3, title: 'C', status: 'REPORTED', issueType: null,
+                      createdAt: '2026-09-19T12:00:00.000Z', selectValues: { 10: ['HIGH'], 20: ['BUG'] } });
+    assert.deepEqual(filterIssues([a, b, c], { selectValues: { 10: ['LOW'], 20: ['BUG'] } }).map(i => i.id), [1]);
+  });
 });
 
 function issue(input: Partial<IssueSummary> & Pick<IssueSummary, 'id' | 'title' | 'status' | 'issueType' | 'createdAt'>): IssueSummary {
@@ -45,6 +94,9 @@ function issue(input: Partial<IssueSummary> & Pick<IssueSummary, 'id' | 'title' 
     approveUserId: null,
     approveUsername: null,
     internal: false,
+    deletedAt: null,
+    archivedAt: null,
+    selectValues: {},
     ...input
   };
 }

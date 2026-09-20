@@ -34,7 +34,9 @@ public class EventService {
 
     @Transactional
     public void issueEvent(EventType type, Issue issue, User actor, String message) {
-        Event event = new Event(type, message, issue.getProject(), type == EventType.ISSUE_DELETED ? null : issue, actor);
+        // Soft-delete keeps the issue row, so the event still references it via the FK.
+        // The historical issueRefId is also set below so events survive even after a permanent delete.
+        Event event = new Event(type, message, issue.getProject(), issue, actor);
         event.setIssueRefId(issue.getId());
         event.setInternal(issue.isInternal());
         events.save(event);

@@ -1,16 +1,22 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { BadgeModule } from 'primeng/badge';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
 import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { forkJoin } from 'rxjs';
+import { AuthService } from './auth.service';
 import {
   ISSUE_STATUSES,
+  IssueField,
+  IssueFieldOption,
   IssueStatus,
   IssueSummary,
   IssuesService,
@@ -23,16 +29,21 @@ import { IssueDetailDialogComponent } from './issue-detail-dialog.component';
 import { IssueReportDialogComponent } from './issue-report-dialog.component';
 import { ProjectContextService } from './project-context.service';
 import { LiveSyncService } from './live-sync.service';
-import { filterIssues } from './issue-filters';
+import { SelectFilterValue, filterIssues } from './issue-filters';
 
 interface SelectOption<T> {
   label: string;
   value: T;
 }
 
+interface SelectFieldFilter {
+  field: IssueField;
+  options: IssueFieldOption[];
+}
+
 @Component({
   selector: 'app-home',
-  imports: [ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, IssueCreateDialogComponent, IssueDetailDialogComponent, IssueReportDialogComponent, SelectModule, TableModule, TagModule],
+  imports: [BadgeModule, ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, IssueCreateDialogComponent, IssueDetailDialogComponent, IssueReportDialogComponent, MultiSelectModule, SelectModule, TableModule, TagModule],
   template: `
     <p-card styleClass="dashboard-card">
       <div class="page-title">
@@ -49,6 +60,16 @@ interface SelectOption<T> {
                     [disabled]="!projects.currentProjectId()" (onClick)="reportDialogVisible = true" />
           <p-button label="Nuova segnalazione" icon="pi pi-plus" [disabled]="!projects.currentProjectId()"
                     (onClick)="openCreateDialog()" />
+          @if (auth.user()?.role === 'ADMIN') {
+            <p-button label="Eliminate" icon="pi pi-trash" severity="danger" [outlined]="true"
+                      [disabled]="!projects.currentProjectId()" (onClick)="navigate('/eliminate')">
+              @if (deletedCount() > 0) { <p-badge [value]="deletedCount()" severity="danger" /> }
+            </p-button>
+          }
+          <p-button label="Archiviate" icon="pi pi-inbox" severity="secondary" [outlined]="true"
+                    [disabled]="!projects.currentProjectId()" (onClick)="navigate('/archivio')">
+            @if (archivedCount() > 0) { <p-badge [value]="archivedCount()" severity="info" /> }
+          </p-button>
           <p-button label="Aggiorna" icon="pi pi-refresh" severity="secondary" [outlined]="true"
                     [loading]="loading()" [disabled]="!projects.currentProjectId()" (onClick)="load()" />
         </div>
@@ -81,6 +102,16 @@ interface SelectOption<T> {
                           [showIcon]="true" [showButtonBar]="true" appendTo="body"
                           placeholder="Seleziona intervallo" />
           </label>
+          @for (filter of selectFieldFilters(); track filter.field.id) {
+            <label>
+              <span>{{ filter.field.label }}</span>
+              <p-multiselect [options]="filter.options" optionLabel="label" optionValue="value"
+                             [ngModel]="selectFilterValueFor(filter.field.id)"
+                             (ngModelChange)="setSelectFilter(filter.field.id, $event)"
+                             [placeholder]="'Tutti'" [showClear]="false"
+                             display="chip" appendTo="body" />
+            </label>
+          }
           <p-button label="Pulisci" icon="pi pi-filter-slash" severity="secondary" [outlined]="true" (onClick)="resetFilters()" />
         </section>
 
@@ -137,20 +168,30 @@ export class HomeComponent {
   readonly projects = inject(ProjectContextService);
   private readonly issuesApi = inject(IssuesService);
   private readonly eventSync = inject(LiveSyncService);
+  private readonly router = inject(Router);
+  readonly auth = inject(AuthService);
 
   readonly issues = signal<IssueSummary[]>([]);
   readonly users = signal<ProjectUserSummary[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly deletedCount = signal(0);
+  readonly archivedCount = signal(0);
+  readonly selectFieldFilters = signal<SelectFieldFilter[]>([]);
   createDialogVisible = false;
   reportDialogVisible = false;
   selectedIssueId: number | null = null;
+
+  navigate(path: string): void {
+    this.router.navigateByUrl(path);
+  }
 
   textFilter = '';
   statusFilter: IssueStatus | 'ALL' = 'ALL';
   typeFilter: IssueSummary['issueType'] | 'ALL' | 'NONE' = 'ALL';
   issuerFilter: number | 'ALL' | 'NONE' = 'ALL';
   dateRange: Date[] | null = null;
+  selectFilterValues: Record<number, string[] | null> = {};
 
   readonly statusOptions: SelectOption<IssueStatus | 'ALL'>[] = [
     { label: 'Tutti', value: 'ALL' },
@@ -177,8 +218,26 @@ export class HomeComponent {
       type: this.typeFilter,
       issuerId: this.issuerFilter,
       from: this.dateRange?.[0] ?? null,
-      to: this.dateRange?.[1] ?? null
+      to: this.dateRange?.[1] ?? null,
+      selectValues: this.activeSelectFilters()
     });
+  }
+
+  selectFilterValueFor(fieldId: number): string[] | null {
+    return this.selectFilterValues[fieldId] ?? null;
+  }
+
+  setSelectFilter(fieldId: number, values: string[] | null): void {
+    this.selectFilterValues[fieldId] = values && values.length > 0 ? values : null;
+  }
+
+  private activeSelectFilters(): Record<number, SelectFilterValue> {
+    const filters: Record<number, SelectFilterValue> = {};
+    for (const filter of this.selectFieldFilters()) {
+      const selected = this.selectFilterValues[filter.field.id];
+      if (selected && selected.length > 0) filters[filter.field.id] = selected;
+    }
+    return filters;
   }
 
   private lastProjectId: number | null = null;
@@ -204,11 +263,25 @@ export class HomeComponent {
     const sequence = ++this.loadSequence;
     this.loading.set(true);
     this.error.set(null);
-    forkJoin({ issues: this.issuesApi.issues(projectId), users: this.issuesApi.projectUsers(projectId) }).subscribe({
-      next: ({ issues, users }) => {
+    const role = this.auth.user()?.role;
+    const requests: { [key: string]: any } = {
+      issues: this.issuesApi.issues(projectId),
+      users: this.issuesApi.projectUsers(projectId),
+      fields: this.issuesApi.issueFields(projectId),
+      fieldOptions: this.issuesApi.issueFieldOptions(projectId),
+      archived: this.issuesApi.archivedIssues(projectId)
+    };
+    if (role === 'ADMIN') {
+      requests['deleted'] = this.issuesApi.deletedIssues(projectId);
+    }
+    forkJoin(requests).subscribe({
+      next: (results: any) => {
         if (sequence !== this.loadSequence || projectId !== this.projects.currentProjectId()) return;
-        this.issues.set(issues);
-        this.users.set(users);
+        this.issues.set(results['issues']);
+        this.users.set(results['users']);
+        this.archivedCount.set((results['archived'] as IssueSummary[]).length);
+        this.deletedCount.set(results['deleted'] ? (results['deleted'] as IssueSummary[]).length : 0);
+        this.updateSelectFieldFilters(results['fields'], results['fieldOptions']);
         this.loading.set(false);
       },
       error: () => {
@@ -217,6 +290,26 @@ export class HomeComponent {
         this.loading.set(false);
       }
     });
+  }
+
+  private updateSelectFieldFilters(fields: IssueField[], options: IssueFieldOption[]): void {
+    const selectFields = (fields ?? []).filter(field => field.type === 'SELECT');
+    if (selectFields.length === 0) {
+      this.selectFieldFilters.set([]);
+      return;
+    }
+    const optionsByField = new Map<number, IssueFieldOption[]>();
+    for (const option of options ?? []) {
+      if (!option.active) continue;
+      const list = optionsByField.get(option.definitionId) ?? [];
+      list.push(option);
+      optionsByField.set(option.definitionId, list);
+    }
+    this.selectFieldFilters.set(selectFields.map(field => ({
+      field,
+      options: (optionsByField.get(field.id) ?? [])
+        .sort((a, b) => a.label.localeCompare(b.label, 'it'))
+    })));
   }
 
   openCreateDialog(): void {
@@ -245,6 +338,7 @@ export class HomeComponent {
     this.typeFilter = 'ALL';
     this.issuerFilter = 'ALL';
     this.dateRange = null;
+    this.selectFilterValues = {};
   }
 
   statusLabel(status: IssueStatus): string { return STATUS_LABELS[status]; }
@@ -265,6 +359,9 @@ export class HomeComponent {
     this.loadSequence++;
     this.issues.set([]);
     this.users.set([]);
+    this.deletedCount.set(0);
+    this.archivedCount.set(0);
+    this.selectFieldFilters.set([]);
     this.error.set(null);
     this.resetFilters();
   }

@@ -16,6 +16,7 @@ export interface IssueField {
   projectId: number;
   code: string;
   label: string;
+  description: string | null;
   mandatory: boolean;
   multiple: boolean;
   type: FieldType;
@@ -95,6 +96,9 @@ export interface IssueSummary {
   approveUserId: number | null;
   approveUsername: string | null;
   internal: boolean;
+  deletedAt: string | null;
+  archivedAt: string | null;
+  selectValues: Record<number, string[]>;
 }
 
 export interface CreateIssueInput {
@@ -214,6 +218,12 @@ export class IssuesService {
     });
   }
 
+  archiveIssue(issueId: number): Observable<IssueSummary> {
+    return this.http.post<IssueSummary>(`/api/work/issues/${issueId}/archive`, {}, {
+      headers: this.auth.authHeaders()
+    });
+  }
+
   downloadAttachment(attachmentId: number): Observable<Blob> {
     return this.http.get(`/api/work/attachments/${attachmentId}/download`, {
       headers: this.auth.authHeaders(),
@@ -229,6 +239,24 @@ export class IssuesService {
 
   updateStatus(issueId: number, status: IssueStatus): Observable<IssueSummary> {
     return this.http.patch<IssueSummary>(`/api/work/issues/${issueId}/status`, { status }, {
+      headers: this.auth.authHeaders()
+    });
+  }
+
+  deletedIssues(projectId: number): Observable<IssueSummary[]> {
+    return this.http.get<IssueSummary[]>(`/api/work/projects/${projectId}/issues/deleted`, {
+      headers: this.auth.authHeaders()
+    });
+  }
+
+  archivedIssues(projectId: number): Observable<IssueSummary[]> {
+    return this.http.get<IssueSummary[]>(`/api/work/projects/${projectId}/issues/archived`, {
+      headers: this.auth.authHeaders()
+    });
+  }
+
+  permanentlyDeleteIssues(ids: number[]): Observable<void> {
+    return this.http.post<void>('/api/work/issues/permanent-delete', { ids }, {
       headers: this.auth.authHeaders()
     });
   }

@@ -40,6 +40,10 @@ app:
       from: ${MAIL_FROM:no-reply@tickets.local}
       scheduler-delay: ${MAIL_NOTIFICATIONS_DELAY:5m}
 
+  archive:
+    enabled: ${ARCHIVE_ENABLED:true}
+    check-interval: ${ARCHIVE_CHECK_INTERVAL:60m}
+
 logging:
   level:
     root: ${LOG_LEVEL_ROOT:INFO}

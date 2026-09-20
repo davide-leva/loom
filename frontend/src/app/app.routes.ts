@@ -40,6 +40,16 @@ export const routes: Routes = [
           ? true : inject(Router).createUrlTree(['/dashboard'])]
       },
       {
+        path: 'eliminate',
+        loadComponent: () => import('./deleted-issues.component').then(module => module.DeletedIssuesComponent),
+        canActivate: [() => inject(AuthService).user()?.role === 'ADMIN'
+          ? true : inject(Router).createUrlTree(['/dashboard'])]
+      },
+      {
+        path: 'archivio',
+        loadComponent: () => import('./archived-issues.component').then(module => module.ArchivedIssuesComponent)
+      },
+      {
         path: 'configurazione',
         loadComponent: () => import('./config/configuration-layout.component')
           .then(module => module.ConfigurationLayoutComponent),

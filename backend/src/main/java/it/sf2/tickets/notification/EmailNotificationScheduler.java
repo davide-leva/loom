@@ -143,6 +143,7 @@ public class EmailNotificationScheduler {
             case ISSUE_ATTACHMENT_UPLOADED -> "Nuovo allegato";
             case ISSUE_VALUES_CHANGED -> "Campi aggiornati";
             case ISSUE_DELETED -> "Segnalazione eliminata";
+            case ISSUE_ARCHIVED -> "Segnalazione archiviata";
         };
     }
 
@@ -158,6 +159,7 @@ public class EmailNotificationScheduler {
             case ISSUE_ATTACHMENT_UPLOADED -> appendDetail("È stato caricato un nuovo allegato. L’allegato è disponibile nel dettaglio della segnalazione.", detail);
             case ISSUE_VALUES_CHANGED -> "I campi della segnalazione sono stati aggiornati.";
             case ISSUE_DELETED -> "La segnalazione è stata eliminata. Questa comunicazione resta come traccia dell’operazione eseguita.";
+            case ISSUE_ARCHIVED -> "La segnalazione è stata archiviata automaticamente perché è trascorso il periodo di mantenimento configurato per il progetto. È ancora consultabile dalla sezione Archiviate.";
         };
     }
 

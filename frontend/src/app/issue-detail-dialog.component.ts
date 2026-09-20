@@ -130,6 +130,10 @@ import {
                 @if (canApprove()) {
                   <p-button label="Approva" icon="pi pi-check" [loading]="approving" (onClick)="approve()" />
                 }
+                @if (canArchive()) {
+                  <p-button label="Archivia" icon="pi pi-inbox" severity="secondary" [outlined]="true"
+                            [loading]="archiving" (onClick)="archiveIssue()" />
+                }
                 @if (canDeleteIssue()) {
                   <p-button label="Elimina issue" icon="pi pi-trash" severity="danger" [loading]="deleting"
                             (onClick)="deleteIssue()" />
@@ -211,6 +215,7 @@ export class IssueDetailDialogComponent {
   visible = true;
   loading = false;
   approving = false;
+  archiving = false;
   deleting = false;
   commentSaving = false;
   teamFieldsSaving = false;
@@ -303,7 +308,17 @@ export class IssueDetailDialogComponent {
   }
 
   canApprove(): boolean {
-    return this.auth.user()?.role === 'SUPERUSER' && this.detail?.issue.status === 'RELEASED';
+    const role = this.auth.user()?.role;
+    const issue = this.detail?.issue;
+    if (!issue || issue.status !== 'RELEASED') return false;
+    if (role === 'SUPERUSER') return true;
+    return role === 'ADMIN' && issue.internal;
+  }
+
+  canArchive(): boolean {
+    const role = this.auth.user()?.role;
+    const issue = this.detail?.issue;
+    return role === 'ADMIN' && !!issue && issue.status === 'APPROVED';
   }
 
   canEditTeamFields(): boolean {
@@ -312,7 +327,8 @@ export class IssueDetailDialogComponent {
   }
 
   showIssueActions(): boolean {
-    return (this.canEditTeamFields() && this.teamFields.length > 0) || this.canApprove() || this.canDeleteIssue();
+    return (this.canEditTeamFields() && this.teamFields.length > 0)
+      || this.canApprove() || this.canArchive() || this.canDeleteIssue();
   }
 
   displayValues() {
@@ -356,6 +372,19 @@ export class IssueDetailDialogComponent {
         this.approving = false;
       },
       error: () => { this.error = 'Non riesco ad approvare la issue.'; this.approving = false; }
+    });
+  }
+
+  archiveIssue(): void {
+    if (!this.detail || this.archiving) return;
+    this.archiving = true;
+    this.issuesApi.archiveIssue(this.detail.issue.id).subscribe({
+      next: issue => {
+        this.detail = { ...this.detail!, issue };
+        this.issueChanged.emit(issue);
+        this.archiving = false;
+      },
+      error: () => { this.error = 'Non riesco ad archiviare la issue.'; this.archiving = false; }
     });
   }
 

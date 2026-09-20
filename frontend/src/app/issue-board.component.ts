@@ -6,6 +6,7 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
 import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { forkJoin } from 'rxjs';
@@ -14,6 +15,8 @@ import { IssueCreateDialogComponent } from './issue-create-dialog.component';
 import { IssueDetailDialogComponent } from './issue-detail-dialog.component';
 import {
   ISSUE_STATUSES,
+  IssueField,
+  IssueFieldOption,
   IssueStatus,
   IssueSummary,
   IssueType,
@@ -24,14 +27,19 @@ import {
 } from './issues.service';
 import { ProjectContextService } from './project-context.service';
 import { LiveSyncService } from './live-sync.service';
-import { filterIssues } from './issue-filters';
+import { SelectFilterValue, filterIssues } from './issue-filters';
 import { IssueNotificationsService } from './issue-notifications.service';
 
 interface SelectOption<T> { label: string; value: T; }
 
+interface SelectFieldFilter {
+  field: IssueField;
+  options: IssueFieldOption[];
+}
+
 @Component({
   selector: 'app-issue-board',
-  imports: [ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, IssueCreateDialogComponent, IssueDetailDialogComponent, SelectModule, TagModule],
+  imports: [ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, IssueCreateDialogComponent, IssueDetailDialogComponent, MultiSelectModule, SelectModule, TagModule],
   template: `
     <p-card styleClass="board-card">
       <div class="page-title">
@@ -73,6 +81,16 @@ interface SelectOption<T> { label: string; value: T; }
                           [showIcon]="true" [showButtonBar]="true" appendTo="body"
                           placeholder="Seleziona intervallo" />
           </label>
+          @for (filter of selectFieldFilters(); track filter.field.id) {
+            <label>
+              <span>{{ filter.field.label }}</span>
+              <p-multiselect [options]="filter.options" optionLabel="label" optionValue="value"
+                             [ngModel]="selectFilterValueFor(filter.field.id)"
+                             (ngModelChange)="setSelectFilter(filter.field.id, $event)"
+                             [placeholder]="'Tutti'" [showClear]="false"
+                             display="chip" appendTo="body" />
+            </label>
+          }
           <p-button label="Pulisci" icon="pi pi-filter-slash" severity="secondary" [outlined]="true" (onClick)="resetFilters()" />
         </section>
 
@@ -173,6 +191,7 @@ export class IssueBoardComponent {
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly savingIssueId = signal<number | null>(null);
+  readonly selectFieldFilters = signal<SelectFieldFilter[]>([]);
   @ViewChild('kanbanBoard') private kanbanBoard?: ElementRef<HTMLElement>;
   @ViewChildren('kanbanColumn') private kanbanColumns?: QueryList<ElementRef<HTMLElement>>;
   createDialogVisible = false;
@@ -188,6 +207,7 @@ export class IssueBoardComponent {
   issuerFilter: number | 'ALL' | 'NONE' = 'ALL';
   developerFilter: number | 'ALL' | 'NONE' = 'ALL';
   dateRange: Date[] | null = null;
+  selectFilterValues: Record<number, string[] | null> = {};
 
   private draggedIssue: IssueSummary | null = null;
   private lastProjectId: number | null = null;
@@ -208,8 +228,26 @@ export class IssueBoardComponent {
       issuerId: this.issuerFilter,
       developerId: this.developerFilter,
       from: this.dateRange?.[0] ?? null,
-      to: this.dateRange?.[1] ?? null
+      to: this.dateRange?.[1] ?? null,
+      selectValues: this.activeSelectFilters()
     });
+  }
+
+  selectFilterValueFor(fieldId: number): string[] | null {
+    return this.selectFilterValues[fieldId] ?? null;
+  }
+
+  setSelectFilter(fieldId: number, values: string[] | null): void {
+    this.selectFilterValues[fieldId] = values && values.length > 0 ? values : null;
+  }
+
+  private activeSelectFilters(): Record<number, SelectFilterValue> {
+    const filters: Record<number, SelectFilterValue> = {};
+    for (const filter of this.selectFieldFilters()) {
+      const selected = this.selectFilterValues[filter.field.id];
+      if (selected && selected.length > 0) filters[filter.field.id] = selected;
+    }
+    return filters;
   }
 
   constructor() {
@@ -233,11 +271,17 @@ export class IssueBoardComponent {
     const sequence = ++this.loadSequence;
     this.loading.set(true);
     this.error.set(null);
-    forkJoin({ issues: this.issuesApi.issues(projectId), users: this.issuesApi.projectUsers(projectId) }).subscribe({
-      next: ({ issues, users }) => {
+    forkJoin({
+      issues: this.issuesApi.issues(projectId),
+      users: this.issuesApi.projectUsers(projectId),
+      fields: this.issuesApi.issueFields(projectId),
+      fieldOptions: this.issuesApi.issueFieldOptions(projectId)
+    }).subscribe({
+      next: ({ issues, users, fields, fieldOptions }) => {
         if (sequence !== this.loadSequence || projectId !== this.projects.currentProjectId()) return;
         this.issues.set(issues);
         this.users.set(users);
+        this.updateSelectFieldFilters(fields, fieldOptions);
         this.loading.set(false);
       },
       error: () => {
@@ -246,6 +290,26 @@ export class IssueBoardComponent {
         this.loading.set(false);
       }
     });
+  }
+
+  private updateSelectFieldFilters(fields: IssueField[], options: IssueFieldOption[]): void {
+    const selectFields = (fields ?? []).filter(field => field.type === 'SELECT');
+    if (selectFields.length === 0) {
+      this.selectFieldFilters.set([]);
+      return;
+    }
+    const optionsByField = new Map<number, IssueFieldOption[]>();
+    for (const option of options ?? []) {
+      if (!option.active) continue;
+      const list = optionsByField.get(option.definitionId) ?? [];
+      list.push(option);
+      optionsByField.set(option.definitionId, list);
+    }
+    this.selectFieldFilters.set(selectFields.map(field => ({
+      field,
+      options: (optionsByField.get(field.id) ?? [])
+        .sort((a, b) => a.label.localeCompare(b.label, 'it'))
+    })));
   }
 
   openCreateDialog(): void {
@@ -273,6 +337,7 @@ export class IssueBoardComponent {
     this.issuerFilter = 'ALL';
     this.developerFilter = 'ALL';
     this.dateRange = null;
+    this.selectFilterValues = {};
   }
 
   issuesByStatus(status: IssueStatus): IssueSummary[] {
@@ -325,8 +390,15 @@ export class IssueBoardComponent {
     this.draggedIssue = null;
     if (!issue || issue.status === status || this.savingIssueId() !== null) return;
     if (status === 'APPROVED' && issue.status !== 'APPROVED') {
-      if (this.auth.user()?.role !== 'SUPERUSER' || issue.status !== 'RELEASED') {
-        this.error.set('Solo un SUPERUSER può spostare una segnalazione rilasciata in Approvato.');
+      const role = this.auth.user()?.role;
+      const isSuperuser = role === 'SUPERUSER';
+      const isAdminOnInternal = role === 'ADMIN' && issue.internal;
+      if (!isSuperuser && !isAdminOnInternal) {
+        this.error.set('Solo un SUPERUSER (o un ADMIN per issue interne) può spostare in Approvato.');
+        return;
+      }
+      if (issue.status !== 'RELEASED') {
+        this.error.set('Solo le segnalazioni rilasciate possono essere approvate.');
         return;
       }
     } else if (this.auth.user()?.role !== 'TEAM' && this.auth.user()?.role !== 'ADMIN') {
@@ -371,6 +443,7 @@ export class IssueBoardComponent {
     this.loadSequence++;
     this.issues.set([]);
     this.users.set([]);
+    this.selectFieldFilters.set([]);
     this.error.set(null);
     this.resetFilters();
   }

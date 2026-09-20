@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface IssueDataRepository extends JpaRepository<IssueData, Long> {
     List<IssueData> findByProjectId(Long projectId);
     List<IssueData> findByIssueId(Long issueId);
+    List<IssueData> findByIssueIdIn(Collection<Long> issueIds);
     List<IssueData> findByIssueIdAndDefinitionIdIn(Long issueId, Collection<Long> definitionIds);
     void deleteByIssueIdAndDefinitionIdIn(Long issueId, Collection<Long> definitionIds);
     boolean existsByIssueIdAndDefinitionId(Long issueId, Long definitionId);

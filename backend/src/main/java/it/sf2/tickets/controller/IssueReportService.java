@@ -7,6 +7,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -22,47 +24,52 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Generates the printable issue report. Each tipologia (issue type) plus the dedicated
+ * "Rifiutati" (soft-deleted) section are rendered as separate groups; pages are A4 portrait,
+ * text is word-wrapped inside each cell, and the row height adapts to the tallest cell.
+ */
 @Service
 @Slf4j
 public class IssueReportService {
-    private static final PDRectangle PAGE_SIZE = new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth());
+    /** A4 portrait orientation (width 595.27pt × height 841.89pt). */
+    private static final PDRectangle PAGE_SIZE = PDRectangle.A4;
     private static final float MARGIN = 36;
-    private static final float ROW_HEIGHT = 22;
-    private static final float[] WIDTHS = {36, 194, 72, 80, 90, 90, 78, 58};
-    private static final String[] HEADERS = {"ID", "Titolo", "Stato", "Tipologia", "Segnalatore",
-        "Sviluppatore", "Data", "Visibilità"};
+    private static final float HEADER_PAD = 14;
+    private static final float CELL_PAD = 6;
+    private static final float LINE_HEIGHT = 12;
+    private static final float SECTION_GAP = 12;
+    private static final float TITLE_GAP = 16;
+    private static final float HEADING_HEIGHT = 22;
+    private static final float FOOTER_GAP = 18;
+    /** Column widths sum to {@code ~523pt} = page width (595.27) − 2 × MARGIN (36). */
+    private static final float[] WIDTHS = {32, 200, 62, 70, 100, 59};
+    private static final String[] HEADERS = {"ID", "Titolo", "Stato", "Tipologia", "Segnalatore", "Data"};
     private static final PDFont REGULAR = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
     private static final PDFont BOLD = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy")
         .withZone(ZoneId.systemDefault());
 
-    public byte[] generate(String projectName, List<Issue> issues, List<String> activeFilters) {
+    public record Section(String title, List<Issue> issues) {}
+
+    public byte[] generate(String projectName, List<Section> sections, List<String> activeFilters) {
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             PageWriter writer = new PageWriter(document);
             writer.openPage();
-            writer.text("Report segnalazioni", MARGIN, writer.y, 18, BOLD);
-            writer.y -= 22;
-            writer.text("Progetto: " + projectName, MARGIN, writer.y, 11, BOLD);
-            writer.y -= 16;
-            writer.text("Generato il " + DATE_FORMAT.format(java.time.Instant.now()) + " · Totale: " + issues.size(),
-                MARGIN, writer.y, 9, REGULAR);
-            writer.y -= 15;
-            writer.text(truncate(activeFilters.isEmpty() ? "Filtri: nessuno" : "Filtri: " + String.join(" · ", activeFilters),
-                REGULAR, 8, PAGE_SIZE.getWidth() - MARGIN * 2), MARGIN, writer.y, 8, REGULAR);
-            writer.y -= 20;
-            writer.tableHeader();
+            writer.writeHeader(projectName, sections, activeFilters);
 
-            for (Issue issue : issues) {
-                if (writer.y - ROW_HEIGHT < MARGIN) {
-                    writer.closePage();
-                    writer.openPage();
-                    writer.tableHeader();
-                }
-                writer.row(issue);
+            boolean anyRow = false;
+            for (Section section : sections) {
+                if (section.issues().isEmpty()) continue;
+                anyRow = true;
+                writer.writeSection(section);
             }
-            if (issues.isEmpty()) {
-                writer.text("Nessuna segnalazione corrisponde ai filtri selezionati.", MARGIN, writer.y - 18, 10, REGULAR);
+
+            if (!anyRow) {
+                writer.ensureSpace(2 * LINE_HEIGHT);
+                writer.text("Nessuna segnalazione corrisponde ai filtri selezionati.", MARGIN, writer.y - LINE_HEIGHT, 10, REGULAR);
             }
+
             writer.closePage();
             document.save(output);
             return output.toByteArray();
@@ -95,12 +102,48 @@ public class IssueReportService {
         return user == null ? "Non assegnato" : user.getUsername();
     }
 
+    /**
+     * Splits {@code value} into lines that each fit within {@code maxWidth} when rendered with
+     * {@code font} at {@code fontSize}. Words that themselves exceed {@code maxWidth} are
+     * truncated with an ellipsis.
+     */
+    private static List<String> wrapText(String value, PDFont font, float fontSize, float maxWidth) throws IOException {
+        String text = pdfText(value == null ? "" : value);
+        if (text.isBlank()) return Collections.singletonList("");
+        if (textWidth(text, font, fontSize) <= maxWidth) return Collections.singletonList(text);
+
+        List<String> lines = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (String word : text.split("\\s+")) {
+            String candidate = current.length() == 0 ? word : current + " " + word;
+            if (textWidth(candidate, font, fontSize) <= maxWidth) {
+                current = new StringBuilder(candidate);
+                continue;
+            }
+            if (current.length() > 0) {
+                lines.add(current.toString());
+                current = new StringBuilder();
+            }
+            if (textWidth(word, font, fontSize) <= maxWidth) {
+                current = new StringBuilder(word);
+            } else {
+                lines.add(truncate(word, font, fontSize, maxWidth));
+            }
+        }
+        if (current.length() > 0) lines.add(current.toString());
+        return lines;
+    }
+
+    private static float textWidth(String text, PDFont font, float fontSize) throws IOException {
+        return font.getStringWidth(text) / 1000f * fontSize;
+    }
+
     private static String truncate(String value, PDFont font, float fontSize, float maxWidth) throws IOException {
         String safe = pdfText(value == null ? "" : value);
-        if (font.getStringWidth(safe) / 1000 * fontSize <= maxWidth) return safe;
+        if (textWidth(safe, font, fontSize) <= maxWidth) return safe;
         String suffix = "...";
         int end = safe.length();
-        while (end > 0 && font.getStringWidth(safe.substring(0, end) + suffix) / 1000 * fontSize > maxWidth) end--;
+        while (end > 0 && textWidth(safe.substring(0, end) + suffix, font, fontSize) > maxWidth) end--;
         return safe.substring(0, end) + suffix;
     }
 
@@ -115,6 +158,12 @@ public class IssueReportService {
             }
         }
         return output.toString();
+    }
+
+    private static float tableWidth() {
+        float width = 0;
+        for (float column : WIDTHS) width += column;
+        return width;
     }
 
     private static final class PageWriter {
@@ -138,31 +187,94 @@ public class IssueReportService {
             content = null;
         }
 
-        private void tableHeader() throws IOException {
-            fill(0.91f, 0.94f, 0.97f, MARGIN, y - ROW_HEIGHT, tableWidth(), ROW_HEIGHT);
-            float x = MARGIN;
-            for (int index = 0; index < HEADERS.length; index++) {
-                text(HEADERS[index], x + 4, y - 15, 8, BOLD);
-                x += WIDTHS[index];
-            }
-            line(MARGIN, y - ROW_HEIGHT, MARGIN + tableWidth(), y - ROW_HEIGHT);
-            y -= ROW_HEIGHT;
+        private void newPage() throws IOException {
+            closePage();
+            openPage();
         }
 
-        private void row(Issue issue) throws IOException {
-            if (issue.isInternal()) fill(0.86f, 0.93f, 1f, MARGIN, y - ROW_HEIGHT, tableWidth(), ROW_HEIGHT);
-            String[] values = {
-                "#" + issue.getId(), issue.getTitle(), statusLabel(issue.getStatus()), typeLabel(issue.getIssueType()),
-                username(issue.getIssuer()), username(issue.getDeveloper()), DATE_FORMAT.format(issue.getCreatedAt()),
-                issue.isInternal() ? "Interna" : "Pubblica"
-            };
+        private void writeHeader(String projectName, List<Section> sections, List<String> activeFilters) throws IOException {
+            text("Report segnalazioni", MARGIN, y, 18, BOLD);
+            y -= TITLE_GAP + 4;
+            text("Progetto: " + projectName, MARGIN, y, 11, BOLD);
+            y -= TITLE_GAP;
+            int totalIssues = sections.stream().mapToInt(s -> s.issues().size()).sum();
+            text("Generato il " + DATE_FORMAT.format(java.time.Instant.now())
+                + " · Totale: " + totalIssues, MARGIN, y, 9, REGULAR);
+            y -= LINE_HEIGHT + 2;
+            String filterText = activeFilters.isEmpty()
+                ? "Filtri: nessuno"
+                : "Filtri: " + String.join(" · ", activeFilters);
+            text(truncate(filterText, REGULAR, 8, PAGE_SIZE.getWidth() - MARGIN * 2), MARGIN, y, 8, REGULAR);
+            y -= FOOTER_GAP;
+        }
+
+        private void writeSection(Section section) throws IOException {
+            ensureSpace(HEADING_HEIGHT + HEADER_PAD);
+            fill(0.94f, 0.96f, 0.99f, MARGIN, y - HEADING_HEIGHT, tableWidth(), HEADING_HEIGHT);
+            text(section.title(), MARGIN + CELL_PAD, y - HEADING_HEIGHT + 6, 12, BOLD);
+            y -= HEADING_HEIGHT;
+            ensureSpace(HEADER_PAD);
+            writeTableHeader();
+
+            for (Issue issue : section.issues()) {
+                writeRow(issue);
+            }
+            y -= SECTION_GAP;
+        }
+
+        private void writeTableHeader() throws IOException {
+            ensureSpace(HEADER_PAD);
+            fill(0.91f, 0.94f, 0.97f, MARGIN, y - HEADER_PAD, tableWidth(), HEADER_PAD);
             float x = MARGIN;
-            for (int index = 0; index < values.length; index++) {
-                text(truncate(values[index], REGULAR, 8, WIDTHS[index] - 8), x + 4, y - 15, 8, REGULAR);
+            for (int index = 0; index < HEADERS.length; index++) {
+                text(HEADERS[index], x + 4, y - 10, 8, BOLD);
                 x += WIDTHS[index];
             }
-            line(MARGIN, y - ROW_HEIGHT, MARGIN + tableWidth(), y - ROW_HEIGHT);
-            y -= ROW_HEIGHT;
+            line(MARGIN, y - HEADER_PAD, MARGIN + tableWidth(), y - HEADER_PAD);
+            y -= HEADER_PAD;
+        }
+
+        private void writeRow(Issue issue) throws IOException {
+            String[] values = {
+                "#" + issue.getId(), issue.getTitle(), statusLabel(issue.getStatus()),
+                typeLabel(issue.getIssueType()), username(issue.getIssuer()),
+                DATE_FORMAT.format(issue.getCreatedAt())
+            };
+            List<List<String>> cellLines = new ArrayList<>(values.length);
+            int maxLines = 1;
+            for (int i = 0; i < values.length; i++) {
+                List<String> lines = wrapText(values[i], REGULAR, 8, WIDTHS[i] - 8);
+                cellLines.add(lines);
+                maxLines = Math.max(maxLines, lines.size());
+            }
+            float rowHeight = CELL_PAD + maxLines * LINE_HEIGHT + 4;
+
+            ensureSpace(rowHeight);
+
+            if (issue.isDeleted()) {
+                fill(1f, 0.92f, 0.92f, MARGIN, y - rowHeight, tableWidth(), rowHeight);
+            } else if (issue.isInternal()) {
+                fill(0.86f, 0.93f, 1f, MARGIN, y - rowHeight, tableWidth(), rowHeight);
+            }
+
+            float x = MARGIN;
+            for (int i = 0; i < values.length; i++) {
+                List<String> lines = cellLines.get(i);
+                float textX = x + 4;
+                float baselineY = y - CELL_PAD - 4;
+                for (int li = 0; li < lines.size(); li++) {
+                    text(lines.get(li), textX, baselineY - li * LINE_HEIGHT, 8, REGULAR);
+                }
+                x += WIDTHS[i];
+            }
+
+            line(MARGIN, y - rowHeight, MARGIN + tableWidth(), y - rowHeight);
+            y -= rowHeight;
+        }
+
+        private void ensureSpace(float height) throws IOException {
+            if (y - height >= MARGIN) return;
+            newPage();
         }
 
         private void text(String value, float x, float baseline, float size, PDFont font) throws IOException {
@@ -186,12 +298,6 @@ public class IssueReportService {
             content.moveTo(fromX, fromY);
             content.lineTo(toX, toY);
             content.stroke();
-        }
-
-        private static float tableWidth() {
-            float width = 0;
-            for (float column : WIDTHS) width += column;
-            return width;
         }
     }
 }

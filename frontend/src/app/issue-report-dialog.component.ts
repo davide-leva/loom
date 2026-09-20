@@ -5,6 +5,7 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
+import { AuthService } from './auth.service';
 import {
   ISSUE_STATUSES,
   IssueStatus,
@@ -55,11 +56,13 @@ type VisibilityFilter = 'ALL' | 'PUBLIC' | 'INTERNAL';
             <p-select name="report-developer" [options]="developerOptions()" [(ngModel)]="developer"
                       optionLabel="label" optionValue="value" [filter]="true" filterBy="label" appendTo="body" />
           </label>
-          <label>
-            <span>Visibilità</span>
-            <p-select name="report-visibility" [options]="visibilityOptions" [(ngModel)]="visibility"
-                      optionLabel="label" optionValue="value" appendTo="body" />
-          </label>
+          @if (canSeeVisibility()) {
+            <label>
+              <span>Visibilità</span>
+              <p-select name="report-visibility" [options]="visibilityOptions" [(ngModel)]="visibility"
+                        optionLabel="label" optionValue="value" appendTo="body" />
+            </label>
+          }
           <label>
             <span>Periodo di creazione</span>
             <p-datepicker name="report-period" [(ngModel)]="dateRange" selectionMode="range"
@@ -93,10 +96,20 @@ type VisibilityFilter = 'ALL' | 'PUBLIC' | 'INTERNAL';
 })
 export class IssueReportDialogComponent {
   private readonly issuesApi = inject(IssuesService);
+  private readonly auth = inject(AuthService);
 
   @Input({ required: true }) projectId: number | null = null;
   @Input() users: ProjectUserSummary[] = [];
   @Output() closed = new EventEmitter<void>();
+
+  /**
+   * Only ADMIN and TEAM users see internal issues, so the visibility filter is meaningful
+   * for them. USER and SUPERUSER don't see internal issues anyway, so the filter is hidden.
+   */
+  canSeeVisibility(): boolean {
+    const role = this.auth.user()?.role;
+    return role === 'ADMIN' || role === 'TEAM';
+  }
 
   visible = true;
   generating = false;
@@ -150,7 +163,9 @@ export class IssueReportDialogComponent {
       issuerUnassigned: this.issuer === 'NONE' || undefined,
       developerId: typeof this.developer === 'number' ? this.developer : undefined,
       developerUnassigned: this.developer === 'NONE' || undefined,
-      internal: this.visibility === 'ALL' ? undefined : this.visibility === 'INTERNAL',
+      internal: this.canSeeVisibility()
+        ? (this.visibility === 'ALL' ? undefined : this.visibility === 'INTERNAL')
+        : undefined,
       from, to
     }).subscribe({
       next: pdf => {

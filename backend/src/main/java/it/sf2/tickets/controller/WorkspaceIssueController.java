@@ -26,6 +26,7 @@ import it.sf2.tickets.notification.EventService;
 import it.sf2.tickets.notification.IssueNotificationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
@@ -38,6 +39,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -116,8 +118,12 @@ public class WorkspaceIssueController {
         Long id, Long projectId, String title, String description, Instant createdAt,
         IssueStatus status, IssueType issueType, Instant releasedAt, Instant approvedAt,
         Long issuerUserId, String issuerUsername, Long devUserId, String devUsername,
-        Long approveUserId, String approveUsername, boolean internal
+        Long approveUserId, String approveUsername, boolean internal,
+        Instant deletedAt, Instant archivedAt,
+        Map<Long, List<String>> selectValues
     ) {}
+
+    public record IdsPayload(@NotEmpty List<Long> ids) {}
 
     public record IssueDetail(IssueOutput issue, List<ValueOutput> values,
                               List<AttachmentOutput> attachments, List<CommentOutput> comments) {}
@@ -131,7 +137,7 @@ public class WorkspaceIssueController {
     public record UserOutput(Long id, String username, String firstName, String lastName, Role role) {}
 
     public record FieldOutput(
-        Long id, Long projectId, String code, String label,
+        Long id, Long projectId, String code, String label, String description,
         boolean mandatory, boolean multiple, FieldType type, FieldScope scope
     ) {}
 
@@ -159,9 +165,12 @@ public class WorkspaceIssueController {
         Project project = lookup.project(projectId);
         User user = currentUser(authentication);
         requireVisibleProject(project, user);
-        return issues.findByProject_Id(projectId).stream()
+        List<Issue> live = issues.findByProject_IdAndDeletedAtIsNullAndArchivedAtIsNull(projectId).stream()
             .filter(issue -> canSeeIssue(issue, user))
-            .map(WorkspaceIssueController::issueOutput)
+            .toList();
+        Map<Long, Map<Long, List<String>>> selectValues = selectValuesFor(live, project, user);
+        return live.stream()
+            .map(issue -> issueOutput(issue, selectValues.getOrDefault(issue.getId(), Map.of())))
             .toList();
     }
 
@@ -193,7 +202,7 @@ public class WorkspaceIssueController {
         }
 
         String normalizedSearch = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
-        List<Issue> reportIssues = issues.findByProject_Id(projectId).stream()
+        List<Issue> filtered = issues.findByProject_Id(projectId).stream()
             .filter(issue -> canSeeIssue(issue, user))
             .filter(issue -> status == null || issue.getStatus() == status)
             .filter(issue -> issueType == null || issue.getIssueType() == issueType)
@@ -210,14 +219,47 @@ public class WorkspaceIssueController {
                 .thenComparing(Comparator.comparing(Issue::getId).reversed()))
             .toList();
 
+        List<IssueReportService.Section> sections = buildReportSections(filtered);
+
         List<String> activeFilters = reportFilterLabels(search, status, issueType, uncategorized, issuerId,
             issuerUnassigned, developerId, developerUnassigned, internal, from, to);
-        byte[] pdf = issueReports.generate(project.getName(), reportIssues, activeFilters);
+        byte[] pdf = issueReports.generate(project.getName(), sections, activeFilters);
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_PDF)
             .header(HttpHeaders.CONTENT_DISPOSITION,
                 "attachment; filename=\"report-segnalazioni-" + projectId + ".pdf\"")
             .body(pdf);
+    }
+
+
+    /**
+     * Groups the filtered issues into tipologia sections (Anomalia / Miglioria / Implementazione /
+     * Non categorizzata), plus a dedicated "Rifiutati" section for soft-deleted issues. Archived
+     * issues stay inside their own tipologia section so the reader sees the full breakdown.
+     */
+    private List<IssueReportService.Section> buildReportSections(List<Issue> filtered) {
+        List<Issue> rejected = new ArrayList<>();
+        Map<IssueType, List<Issue>> byType = new LinkedHashMap<>();
+        byType.put(IssueType.ANOMALY, new ArrayList<>());
+        byType.put(IssueType.IMPROVEMENT, new ArrayList<>());
+        byType.put(IssueType.IMPLEMENTATION, new ArrayList<>());
+        byType.put(null, new ArrayList<>());
+
+        for (Issue issue : filtered) {
+            if (issue.isDeleted()) {
+                rejected.add(issue);
+                continue;
+            }
+            byType.get(issue.getIssueType()).add(issue);
+        }
+
+        List<IssueReportService.Section> sections = new ArrayList<>();
+        sections.add(new IssueReportService.Section("Anomalia", byType.get(IssueType.ANOMALY)));
+        sections.add(new IssueReportService.Section("Miglioria", byType.get(IssueType.IMPROVEMENT)));
+        sections.add(new IssueReportService.Section("Implementazione", byType.get(IssueType.IMPLEMENTATION)));
+        sections.add(new IssueReportService.Section("Non categorizzata", byType.get(null)));
+        if (!rejected.isEmpty()) sections.add(new IssueReportService.Section("Rifiutati", rejected));
+        return sections;
     }
 
 
@@ -450,8 +492,11 @@ public class WorkspaceIssueController {
     }
 
     private IssueOutput approve(Issue issue, User user) {
-        if (user.getRole() != Role.SUPERUSER) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "SUPERUSER role required");
+        boolean superuser = user.getRole() == Role.SUPERUSER;
+        boolean adminOnInternal = user.getRole() == Role.ADMIN && issue.isInternal();
+        if (!superuser && !adminOnInternal) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "SUPERUSER role required, or ADMIN for internal issues");
         }
         if (issue.getStatus() != IssueStatus.RELEASED) {
             throw ApiLookup.badRequest("Only released issues can be approved");
@@ -464,13 +509,45 @@ public class WorkspaceIssueController {
         return issueOutput(issue);
     }
 
+    /**
+     * Admin-only manual archive for approved issues. Distinct from the auto-archive scheduler
+     * which only targets RELEASED issues that have aged past {@code archiveAfterDays}.
+     */
+    @PostMapping("/issues/{issueId}/archive")
+    public IssueOutput archiveApprovedIssue(@PathVariable Long issueId, JwtAuthenticationToken authentication) {
+        User user = currentUser(authentication);
+        requireAdmin(user);
+        Issue issue = lookup.issue(issueId);
+        if (issue.isDeleted()) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Issue deleted");
+        }
+        if (issue.isArchived()) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Issue already archived");
+        }
+        if (issue.getStatus() != IssueStatus.APPROVED) {
+            throw ApiLookup.badRequest("Only approved issues can be manually archived");
+        }
+        issue.markArchived(Instant.now());
+        issues.saveAndFlush(issue);
+        eventService.issueEvent(EventType.ISSUE_ARCHIVED, issue, user,
+            "Archiviata manualmente da " + user.getUsername() + ".");
+        log.info("Issue manually archived: project={} issue={} actor={}",
+            issue.getProject().getId(), issueId, user.getId());
+        return issueOutput(issue);
+    }
+
     @DeleteMapping("/issues/{issueId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteIssue(@PathVariable Long issueId, JwtAuthenticationToken authentication) {
         User user = currentUser(authentication);
         Issue issue = lookup.issue(issueId);
         requireVisibleProject(issue.getProject(), user);
-        requireVisibleIssue(issue, user);
+        if (issue.isDeleted()) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Issue already deleted");
+        }
+        if (issue.isArchived() && user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Issue archived");
+        }
         boolean admin = user.getRole() == Role.ADMIN;
         boolean reporter = issue.getIssuer() != null && issue.getIssuer().getId().equals(user.getId());
         boolean withinWindow = issue.getCreatedAt() != null
@@ -478,11 +555,142 @@ public class WorkspaceIssueController {
         if (!admin && (!reporter || !withinWindow)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Issue cannot be deleted");
         }
+        issue.markDeleted(Instant.now());
+        // Flush the soft-delete UPDATE before creating the Event entity, otherwise the Event's
+        // cascade to Issue → IssueAttachment can see the issue as transient and fail.
+        issues.saveAndFlush(issue);
         eventService.issueEvent(EventType.ISSUE_DELETED, issue, user,
             "Titolo: " + issue.getTitle() + "\nDescrizione: " + issue.getDescription());
-        eventService.detachIssue(issueId);
-        issues.delete(issue);
-        log.info("Issue deleted: project={} issue={} actor={}", issue.getProject().getId(), issueId, user.getId());
+        log.info("Issue soft-deleted: project={} issue={} actor={}", issue.getProject().getId(), issueId, user.getId());
+    }
+
+    /**
+     * Admin-only listing of soft-deleted issues. Uses the same filter parameters as the live
+     * issue list so the admin UI mirrors the normal table behaviour.
+     */
+    @GetMapping("/projects/{projectId}/issues/deleted")
+    @Transactional(readOnly = true)
+    public List<IssueOutput> deletedIssuesByProject(
+        @PathVariable Long projectId,
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) IssueStatus status,
+        @RequestParam(required = false) IssueType issueType,
+        @RequestParam(defaultValue = "false") boolean uncategorized,
+        @RequestParam(required = false) Long issuerId,
+        @RequestParam(defaultValue = "false") boolean issuerUnassigned,
+        @RequestParam(required = false) Long developerId,
+        @RequestParam(defaultValue = "false") boolean developerUnassigned,
+        @RequestParam(required = false) Boolean internal,
+        @RequestParam(required = false) Instant from,
+        @RequestParam(required = false) Instant to,
+        JwtAuthenticationToken authentication
+    ) {
+        User user = currentUser(authentication);
+        requireAdmin(user);
+        Project project = lookup.project(projectId);
+        requireVisibleProject(project, user);
+        String normalizedSearch = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        List<Issue> list = issues.findByProject_IdAndDeletedAtIsNotNullOrderByDeletedAtDescIdDesc(projectId).stream()
+            .filter(issue -> matches(issue, status, issueType, uncategorized, issuerId, issuerUnassigned,
+                developerId, developerUnassigned, internal, from, to, normalizedSearch))
+            .toList();
+        Map<Long, Map<Long, List<String>>> selectValues = selectValuesFor(list, project, user);
+        return list.stream()
+            .map(issue -> issueOutput(issue, selectValues.getOrDefault(issue.getId(), Map.of())))
+            .toList();
+    }
+
+    /**
+     * Listing of archived issues. Visible to any role with project access (still respects
+     * internal-visibility rules). Archived issues can be seen by everyone, so this endpoint
+     * does not require admin.
+     */
+    @GetMapping("/projects/{projectId}/issues/archived")
+    @Transactional(readOnly = true)
+    public List<IssueOutput> archivedIssuesByProject(
+        @PathVariable Long projectId,
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) IssueStatus status,
+        @RequestParam(required = false) IssueType issueType,
+        @RequestParam(defaultValue = "false") boolean uncategorized,
+        @RequestParam(required = false) Long issuerId,
+        @RequestParam(defaultValue = "false") boolean issuerUnassigned,
+        @RequestParam(required = false) Long developerId,
+        @RequestParam(defaultValue = "false") boolean developerUnassigned,
+        @RequestParam(required = false) Boolean internal,
+        @RequestParam(required = false) Instant from,
+        @RequestParam(required = false) Instant to,
+        JwtAuthenticationToken authentication
+    ) {
+        Project project = lookup.project(projectId);
+        User user = currentUser(authentication);
+        requireVisibleProject(project, user);
+        String normalizedSearch = search == null ? "" : search.trim().toLowerCase(Locale.ROOT);
+        List<Issue> list = issues.findByProject_IdAndArchivedAtIsNotNullAndDeletedAtIsNullOrderByArchivedAtDescIdDesc(projectId).stream()
+            .filter(issue -> canSeeIssue(issue, user))
+            .filter(issue -> matches(issue, status, issueType, uncategorized, issuerId, issuerUnassigned,
+                developerId, developerUnassigned, internal, from, to, normalizedSearch))
+            .toList();
+        Map<Long, Map<Long, List<String>>> selectValues = selectValuesFor(list, project, user);
+        return list.stream()
+            .map(issue -> issueOutput(issue, selectValues.getOrDefault(issue.getId(), Map.of())))
+            .toList();
+    }
+
+    /**
+     * Admin-only permanent multi-delete. Unlike {@link #deleteIssue(Long, JwtAuthenticationToken)},
+     * this removes the row (and cascades to comments/values/attachments). Detaches the issue
+     * from any historical events first so the audit trail survives.
+     */
+    @PostMapping("/issues/permanent-delete")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void permanentlyDeleteIssues(@Valid @RequestBody IdsPayload payload,
+                                        JwtAuthenticationToken authentication) {
+        User user = currentUser(authentication);
+        requireAdmin(user);
+        if (payload.ids() == null || payload.ids().isEmpty()) return;
+        for (Long id : payload.ids()) {
+            Issue issue = lookup.issue(id);
+            requireVisibleProject(issue.getProject(), user);
+            deleteAttachmentFiles(issue);
+            eventService.detachIssue(id);
+            issues.delete(issue);
+            log.info("Issue permanently deleted: project={} issue={} actor={}",
+                issue.getProject().getId(), id, user.getId());
+        }
+    }
+
+    private void deleteAttachmentFiles(Issue issue) {
+        for (IssueAttachment attachment : attachments.findByIssue_IdOrderByUploadedAtAscIdAsc(issue.getId())) {
+            if (attachment.getStoredPath() == null) continue;
+            try {
+                Files.deleteIfExists(Paths.get(attachment.getStoredPath()));
+            } catch (IOException exception) {
+                log.warn("Cannot delete attachment file: issue={} attachment={} path={} reason={}",
+                    issue.getId(), attachment.getId(), attachment.getStoredPath(), exception.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Shared predicate used by the deleted/archived list endpoints. Mirrors the inline filter
+     * chain in {@link #issueReport}, excluding the visibility filter (each endpoint applies it
+     * separately).
+     */
+    private boolean matches(Issue issue, IssueStatus status, IssueType issueType, boolean uncategorized,
+                            Long issuerId, boolean issuerUnassigned, Long developerId, boolean developerUnassigned,
+                            Boolean internal, Instant from, Instant to, String normalizedSearch) {
+        if (status != null && issue.getStatus() != status) return false;
+        if (issueType != null && issue.getIssueType() != issueType) return false;
+        if (uncategorized && issue.getIssueType() != null) return false;
+        if (issuerId != null && !issuerId.equals(id(issue.getIssuer()))) return false;
+        if (issuerUnassigned && issue.getIssuer() != null) return false;
+        if (developerId != null && !developerId.equals(id(issue.getDeveloper()))) return false;
+        if (developerUnassigned && issue.getDeveloper() != null) return false;
+        if (internal != null && issue.isInternal() != internal) return false;
+        if (from != null && issue.getCreatedAt().isBefore(from)) return false;
+        if (to != null && !issue.getCreatedAt().isBefore(to)) return false;
+        return normalizedSearch.isBlank() || reportSearchText(issue).contains(normalizedSearch);
     }
 
     @PatchMapping("/issues/{issueId}/planning")
@@ -726,6 +934,12 @@ public class WorkspaceIssueController {
     }
 
     private void requireVisibleIssue(Issue issue, User user) {
+        if (issue.isDeleted() && user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Issue deleted");
+        }
+        if (issue.isArchived() && user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.GONE, "Issue archived");
+        }
         if (!canSeeIssue(issue, user)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Issue not available");
         }
@@ -763,11 +977,41 @@ public class WorkspaceIssueController {
         }
     }
 
-    private static IssueOutput issueOutput(Issue issue) {
+    private static IssueOutput issueOutput(Issue issue, Map<Long, List<String>> selectValuesByField) {
         return new IssueOutput(issue.getId(), issue.getProject().getId(), issue.getTitle(), issue.getDescription(),
             issue.getCreatedAt(), issue.getStatus(), issue.getIssueType(), issue.getReleasedAt(), issue.getApprovedAt(),
             id(issue.getIssuer()), username(issue.getIssuer()), id(issue.getDeveloper()), username(issue.getDeveloper()),
-            id(issue.getApprover()), username(issue.getApprover()), issue.isInternal());
+            id(issue.getApprover()), username(issue.getApprover()), issue.isInternal(),
+            issue.getDeletedAt(), issue.getArchivedAt(),
+            selectValuesByField == null ? Map.of() : selectValuesByField);
+    }
+
+    private static IssueOutput issueOutput(Issue issue) {
+        return issueOutput(issue, Map.of());
+    }
+
+    /**
+     * Builds a per-issue map of SELECT field values for the given issues. Only SELECT fields the
+     * user is allowed to use are included. Used to enable select-field filtering on the
+     * dashboard and boards.
+     */
+    private Map<Long, Map<Long, List<String>>> selectValuesFor(List<Issue> target, Project project, User user) {
+        if (target.isEmpty()) return Map.of();
+        List<IssueFieldDefinition> selectDefs = definitions.findByProject_Id(project.getId()).stream()
+            .filter(definition -> definition.getType() == FieldType.SELECT)
+            .filter(definition -> canUseField(definition, user))
+            .toList();
+        if (selectDefs.isEmpty()) return Map.of();
+        Set<Long> selectIds = selectDefs.stream().map(IssueFieldDefinition::getId).collect(Collectors.toSet());
+        Set<Long> issueIds = target.stream().map(Issue::getId).collect(Collectors.toSet());
+        Map<Long, Map<Long, List<String>>> output = new HashMap<>();
+        for (IssueData data : values.findByIssueIdIn(issueIds)) {
+            if (!selectIds.contains(data.getDefinitionId())) continue;
+            output.computeIfAbsent(data.getIssueId(), key -> new HashMap<>())
+                .computeIfAbsent(data.getDefinitionId(), key -> new ArrayList<>())
+                .add(data.getValue());
+        }
+        return output;
     }
 
     private static UserOutput userOutput(User user) {
@@ -776,8 +1020,8 @@ public class WorkspaceIssueController {
 
     private static FieldOutput fieldOutput(IssueFieldDefinition definition) {
         return new FieldOutput(definition.getId(), definition.getProject().getId(), definition.getCode(),
-            definition.getLabel(), definition.isMandatory(), definition.isMultiple(), definition.getType(),
-            definition.getScope());
+            definition.getLabel(), definition.getDescription(),
+            definition.isMandatory(), definition.isMultiple(), definition.getType(), definition.getScope());
     }
 
     private static FieldOptionOutput fieldOptionOutput(it.sf2.tickets.domain.IssueFieldOption option) {
