@@ -82,7 +82,13 @@ class LiveTicketServiceTest {
     }
 
     private static JwtAuthenticationToken auth(long userId, Instant expiresAt) {
-        Jwt jwt = new Jwt("token-" + userId, Instant.now().minusSeconds(1), expiresAt,
+        // Spring's Jwt constructor requires expiresAt > issuedAt, so when the caller
+        // asks for an already-expired token we still have to pick an issuedAt that
+        // is strictly before expiresAt.
+        Instant issuedAt = expiresAt.isAfter(Instant.now())
+            ? Instant.now().minusSeconds(1)
+            : expiresAt.minusSeconds(60);
+        Jwt jwt = new Jwt("token-" + userId, issuedAt, expiresAt,
             Map.of("alg", "none"), Map.of("sub", Long.toString(userId)));
         return new JwtAuthenticationToken(jwt);
     }
