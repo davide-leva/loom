@@ -39,18 +39,20 @@ public class IssueFieldDefinitionController {
         @NotNull Long projectId,
         @NotBlank @Pattern(regexp = "[A-Z0-9_]{1,8}") String code,
         @NotBlank @Size(max = 64) String label,
+        @Size(max = 2000) String description,
         Boolean mandatory, Boolean multiple, @NotNull FieldType type, FieldScope scope
     ) {}
 
     public record Update(
         @NotBlank @Pattern(regexp = "[A-Z0-9_]{1,8}") String code,
         @NotBlank @Size(max = 64) String label,
+        @Size(max = 2000) String description,
         @NotNull Boolean mandatory, @NotNull Boolean multiple, @NotNull FieldType type,
         @NotNull FieldScope scope
     ) {}
 
     public record Output(
-        Long id, Long projectId, String code, String label,
+        Long id, Long projectId, String code, String label, String description,
         boolean mandatory, boolean multiple, FieldType type, FieldScope scope
     ) {}
 
@@ -76,6 +78,7 @@ public class IssueFieldDefinitionController {
     public Output insert(@Valid @RequestBody Create input) {
         IssueFieldDefinition definition = new IssueFieldDefinition(
             lookup.project(input.projectId()), input.code(), input.label(), input.type());
+        definition.setDescription(input.description());
         definition.setMandatory(Boolean.TRUE.equals(input.mandatory()));
         definition.setMultiple(Boolean.TRUE.equals(input.multiple()));
         definition.setScope(input.scope() == null ? FieldScope.USER : input.scope());
@@ -91,6 +94,7 @@ public class IssueFieldDefinitionController {
         }
         definition.setCode(input.code());
         definition.setLabel(input.label());
+        definition.setDescription(input.description());
         definition.setMandatory(input.mandatory());
         definition.setMultiple(input.multiple());
         definition.setType(input.type());
@@ -106,7 +110,7 @@ public class IssueFieldDefinitionController {
 
     private static Output output(IssueFieldDefinition definition) {
         return new Output(definition.getId(), definition.getProject().getId(),
-            definition.getCode(), definition.getLabel(), definition.isMandatory(),
-            definition.isMultiple(), definition.getType(), definition.getScope());
+            definition.getCode(), definition.getLabel(), definition.getDescription(),
+            definition.isMandatory(), definition.isMultiple(), definition.getType(), definition.getScope());
     }
 }

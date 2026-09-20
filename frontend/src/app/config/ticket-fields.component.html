@@ -74,6 +74,13 @@
           <input pInputText id="detail-field-label" name="detailLabel" [(ngModel)]="fieldDraft.label"
                  maxlength="64" required />
         </div>
+        <div class="form-field span-2">
+          <label for="detail-field-description">Descrizione</label>
+          <textarea pInputTextarea id="detail-field-description" name="detailDescription" rows="3"
+                    maxlength="2000" autoResize="true"
+                    [(ngModel)]="fieldDraft.description"
+                    placeholder="Descrizione del campo visibile agli utenti."></textarea>
+        </div>
         <div class="form-field">
           <label for="detail-field-type">Tipo *</label>
           <p-select inputId="detail-field-type" name="detailType" [options]="typeOptions"
@@ -194,6 +201,13 @@
         <label for="field-label">Etichetta *</label>
         <input pInputText id="field-label" name="label" [(ngModel)]="fieldDraft.label"
                maxlength="64" required />
+      </div>
+      <div class="form-field span-2">
+        <label for="field-description">Descrizione</label>
+        <textarea pInputTextarea id="field-description" name="description" rows="3"
+                  maxlength="2000" autoResize="true"
+                  [(ngModel)]="fieldDraft.description"
+                  placeholder="Descrizione del campo visibile agli utenti."></textarea>
       </div>
       <div class="form-field">
         <label for="field-type">Tipo *</label>

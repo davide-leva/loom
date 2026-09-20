@@ -68,7 +68,8 @@ export interface IssueFormModel {
                     }
                   }
                 }
-                @if (field.multiple) { <small>Permette più valori.</small> }
+                @if (field.description) { <small class="field-description">{{ field.description }}</small> }
+                @else if (field.multiple) { <small>Permette più valori.</small> }
               </div>
             }
           }
@@ -98,7 +99,8 @@ export interface IssueFormModel {
                               [showUploadButton]="false" [auto]="false" chooseLabel="Seleziona file"
                               cancelLabel="Svuota" (onSelect)="setFiles(field.id, $event)"
                               (onClear)="clearFiles(field.id)" (onRemove)="removeFile(field.id, $event)" />
-                @if (field.multiple) { <small>Permette più file.</small> }
+                @if (field.description) { <small class="field-description">{{ field.description }}</small> }
+                @else if (field.multiple) { <small>Permette più file.</small> }
               </div>
             }
           }

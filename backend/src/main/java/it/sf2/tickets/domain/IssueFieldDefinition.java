@@ -52,6 +52,9 @@ public class IssueFieldDefinition {
     @Column(nullable = false, length = 16)
     private FieldScope scope = FieldScope.USER;
 
+    @Column(columnDefinition = "text")
+    private String description;
+
     public IssueFieldDefinition(Project project, String code, String label, FieldType type) {
         this.project = project;
         this.code = code;

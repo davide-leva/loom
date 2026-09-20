@@ -5,6 +5,7 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
+import { InputTextarea } from 'primeng/inputtextarea';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { finalize, forkJoin } from 'rxjs';
@@ -26,7 +27,7 @@ type OptionDraft = Required<Pick<IssueFieldOptionInput, 'value' | 'label'>> & { 
 
 @Component({
   selector: 'app-ticket-fields',
-  imports: [FormsModule, ButtonModule, CardModule, DialogModule, InputTextModule, SelectModule,
+  imports: [FormsModule, ButtonModule, CardModule, DialogModule, InputTextModule, InputTextarea, SelectModule,
     TableModule, EntityTableComponent, IssueFormComponent],
   templateUrl: './ticket-fields.component.html',
   styleUrl: './ticket-fields.component.css'
@@ -169,9 +170,11 @@ export class TicketFieldsComponent implements OnInit {
   saveField(): void {
     const projectId = this.selectedProjectId;
     if (projectId === null || this.savingField) return;
+    const description = (this.fieldDraft.description ?? '').trim();
     const input: FieldDraft = {
       code: this.fieldDraft.code.trim().toUpperCase(),
       label: this.fieldDraft.label.trim(),
+      description: description.length > 0 ? description : null,
       type: this.fieldDraft.type,
       scope: this.fieldDraft.scope,
       mandatory: this.fieldDraft.mandatory,
@@ -400,13 +403,14 @@ export class TicketFieldsComponent implements OnInit {
   }
 
   private emptyField(): FieldDraft {
-    return { code: '', label: '', type: 'TEXT', scope: 'USER', mandatory: false, multiple: false };
+    return { code: '', label: '', description: null, type: 'TEXT', scope: 'USER', mandatory: false, multiple: false };
   }
 
   private fieldDraftFrom(field: IssueField): FieldDraft {
     return {
       code: field.code,
       label: field.label,
+      description: field.description ?? null,
       type: field.type,
       scope: field.scope,
       mandatory: field.mandatory,
