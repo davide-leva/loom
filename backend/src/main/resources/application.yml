@@ -10,7 +10,7 @@ spring:
   servlet:
     multipart:
       max-file-size: ${ATTACHMENTS_MAX_FILE_SIZE:25MB}
-      max-request-size: ${ATTACHMENTS_MAX_REQUEST_SIZE:${ATTACHMENTS_MAX_FILE_SIZE:25MB}}
+      max-request-size: ${ATTACHMENTS_MAX_FILE_SIZE:25MB}
   mail:
     host: ${SMTP_HOST:localhost}
     port: ${SMTP_PORT:25}

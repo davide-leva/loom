@@ -48,7 +48,7 @@ docker compose up -d
 Poi apri:
 
 ```text
-http://localhost:4200
+http://localhost:8080
 ```
 
 Se le immagini GHCR sono private, prima fai login:
@@ -65,7 +65,7 @@ Per compilare le immagini dal codice presente nella cartella:
 docker compose -f compose.dev.yml up --build
 ```
 
-Anche in questo caso l’applicazione sarà disponibile su `http://localhost:4200`.
+Anche in questo caso l’applicazione sarà disponibile su `http://localhost:8080`.
 
 Al primo accesso, se il database non contiene utenti, viene mostrata la pagina di configurazione iniziale. Da lì crei la compagnia interna del team sviluppatori e il primo utente `ADMIN`.
 
@@ -81,16 +81,15 @@ Entrambi i compose avviano tre servizi:
 
 | Servizio | Porta host | Variabile |
 | --- | ---: | --- |
-| Frontend | `4200` | `FRONTEND_PORT` |
-| Backend | `8080` | `BACKEND_PORT` |
-| PostgreSQL | `5432` | `DB_PORT` |
+| Frontend | `8080` | `FRONTEND_PORT` |
+
+> Backend e PostgreSQL non sono pubblicati sull'host: vivono solo nella rete Docker.
+> Il frontend raggiunge il backend via `http://backend:8080`; il backend raggiunge Postgres via `jdbc:postgresql://database:5432/...`.
 
 Esempio:
 
 ```env
 FRONTEND_PORT=8081
-BACKEND_PORT=8082
-DB_PORT=5433
 ```
 
 ### Persistenza Docker
@@ -146,11 +145,10 @@ JWT_SECRET=change-me-at-least-32-bytes-long-secret-value
 BACKEND_IMAGE=ghcr.io/your-org/sf2-tickets/backend:latest
 FRONTEND_IMAGE=ghcr.io/your-org/sf2-tickets/frontend:latest
 
-FRONTEND_PORT=4200
-BACKEND_PORT=8080
+FRONTEND_PORT=8080
 
 ATTACHMENTS_MAX_FILE_SIZE=25MB
-ATTACHMENTS_MAX_REQUEST_SIZE=25MB
+ATTACHMENTS_MAX_REQUEST_SIZE=25M
 ```
 
 Notifiche email:
@@ -209,7 +207,7 @@ npm install
 npm start
 ```
 
-Apri `http://localhost:4200`. Il server Angular inoltra `/api`, incluso l'upgrade WebSocket, al backend tramite `frontend/proxy.conf.json`. Dopo una modifica a questo file, riavvia `npm start`: Angular legge la configurazione del proxy all'avvio.
+Apri `http://localhost:4200`. Il server Angular inoltra `/api`, incluso l'upgrade WebSocket, al backend tramite `frontend/proxy.conf.json` (default: backend su `http://localhost:8080`). Dopo una modifica a questo file, riavvia `npm start`: Angular legge la configurazione del proxy all'avvio.
 
 ## Note applicative
 
