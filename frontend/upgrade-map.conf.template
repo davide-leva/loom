@@ -1,0 +1,11 @@
+# Map the request Upgrade header to a Connection header value. Required
+# by the canonical nginx WebSocket pattern: if the client sends
+# `Upgrade: websocket`, we forward `Connection: upgrade`; otherwise we
+# forward `Connection: close` so keep-alive semantics stay sane. With a
+# hard-coded `proxy_set_header Connection "upgrade"`, nginx 1.27 has
+# been observed to drop the 101 Switching Protocols on TLS hops and
+# return 403 to the client even when the backend accepted the handshake.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
