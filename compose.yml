@@ -69,7 +69,12 @@ services:
     environment:
       NGINX_CLIENT_MAX_BODY_SIZE: ${ATTACHMENTS_MAX_REQUEST_SIZE:-25M}
     expose:
-      - "80"
+      - "443"
+    volumes:
+      # Self-signed cert shared with Caddy (see scripts/configure.sh).
+      # Only Caddy talks to nginx on 443, so an internal-only cert is fine.
+      - ./data/caddy/nginx-selfsigned.crt:/etc/nginx/ssl/nginx.crt:ro
+      - ./data/caddy/nginx-selfsigned.key:/etc/nginx/ssl/nginx.key:ro
 
   caddy:
     image: caddy:2-alpine

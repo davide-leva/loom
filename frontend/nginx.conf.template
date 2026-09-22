@@ -1,6 +1,10 @@
 server {
-    listen 80;
+    listen 443 ssl;
+    http2 on;
     server_name _;
+
+    ssl_certificate     /etc/nginx/ssl/nginx.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx.key;
 
     root /usr/share/nginx/html;
     index index.html;
