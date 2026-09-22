@@ -17,7 +17,25 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Walk up from this script's directory until we find .env.example — that
+# directory is the project root. This works both when the script lives at
+# <root>/scripts/configure.sh (canonical layout) and when only this script
+# + .env.example + compose.yml have been bootstrapped by install.sh.
+find_repo_root() {
+    local dir
+    dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    while [[ "${dir}" != "/" ]]; do
+        if [[ -f "${dir}/.env.example" ]]; then
+            (cd "${dir}" && pwd)
+            return 0
+        fi
+        dir="$(dirname "${dir}")"
+    done
+    echo "could not locate .env.example by walking up from ${BASH_SOURCE[0]}" >&2
+    return 1
+}
+
+REPO_ROOT="${REPO_ROOT:-$(find_repo_root)}"
 ENV_FILE="${ENV_FILE:-${REPO_ROOT}/.env}"
 ENV_EXAMPLE="${ENV_EXAMPLE:-${REPO_ROOT}/.env.example}"
 CADDYFILE="${CADDYFILE:-${REPO_ROOT}/Caddyfile}"
