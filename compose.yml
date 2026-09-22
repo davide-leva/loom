@@ -12,7 +12,7 @@ services:
     expose:
       - "5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data/db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -48,8 +48,8 @@ services:
     expose:
       - "8080"
     volumes:
-      - attachments_data:/data/attachments
-      - branding_data:/data/branding
+      - ./data/attachments:/data/attachments
+      - ./data/branding:/data/branding
 
   frontend:
     image: ghcr.io/davide-leva/ticket-platform/frontend:latest
@@ -61,10 +61,19 @@ services:
       - .env
     environment:
       NGINX_CLIENT_MAX_BODY_SIZE: ${ATTACHMENTS_MAX_REQUEST_SIZE:-25M}
-    ports:
-      - "${FRONTEND_PORT:-8080}:80"
+    expose:
+      - "80"
 
-volumes:
-  postgres_data:
-  attachments_data:
-  branding_data:
+  caddy:
+    image: caddy:2-alpine
+    container_name: tickets-caddy
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+      - ./data/caddy-config:/config

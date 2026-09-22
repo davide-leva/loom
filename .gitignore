@@ -6,6 +6,7 @@
 # IDE / OS
 .idea/
 *.iml
+.vscode/
 .DS_Store
 
 # Build outputs
@@ -18,6 +19,8 @@ frontend/.angular/
 frontend/node_modules/
 
 # Runtime files
+data/
+backups/
 attachments/
 backend/attachments/
 backend/branding/

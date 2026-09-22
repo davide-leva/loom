@@ -18,26 +18,18 @@ ghcr.io/<owner>/<repo>/backend
 ghcr.io/<owner>/<repo>/frontend
 ```
 
-Crea il file `.env` partendo dall’esempio:
+Crea il file `.env` e genera i secret con lo script di bootstrap:
 
 ```bash
-cp .env.example .env
+./configure.sh
 ```
 
-Imposta almeno questi valori:
+Lo script:
 
-```env
-DB_PASSWORD='password-del-database'
-JWT_SECRET='una-stringa-segreta-di-almeno-32-caratteri'
-BACKEND_IMAGE=ghcr.io/<owner>/<repo>/backend:latest
-FRONTEND_IMAGE=ghcr.io/<owner>/<repo>/frontend:latest
-```
-
-Per generare un `JWT_SECRET` sicuro puoi usare:
-
-```bash
-openssl rand -hex 32
-```
+- genera `JWT_SECRET` (e opzionalmente `DB_PASSWORD`) con `openssl`;
+- chiede in prompt le variabili che richiedono intervento umano (abilitazione TLS, dominio, SMTP se le mail sono attive, …);
+- scrive `.env` con mode `0600`;
+- genera il `Caddyfile` in base alla scelta TLS.
 
 Avvia tutto:
 
@@ -47,9 +39,8 @@ docker compose up -d
 
 Poi apri:
 
-```text
-http://localhost:8080
-```
+- senza TLS: <http://localhost/>
+- con TLS: <https://tickets.example.com/> (sostituisci con il tuo dominio)
 
 Se le immagini GHCR sono private, prima fai login:
 
@@ -65,40 +56,47 @@ Per compilare le immagini dal codice presente nella cartella:
 docker compose -f compose.dev.yml up --build
 ```
 
-Anche in questo caso l’applicazione sarà disponibile su `http://localhost:8080`.
+Anche in questo caso l’applicazione sarà disponibile sull’URL configurato (vedi sopra).
 
 Al primo accesso, se il database non contiene utenti, viene mostrata la pagina di configurazione iniziale. Da lì crei la compagnia interna del team sviluppatori e il primo utente `ADMIN`.
 
 ### Servizi avviati
 
-Entrambi i compose avviano tre servizi:
+Entrambi i compose avviano quattro servizi:
 
 - `database`: PostgreSQL;
 - `backend`: API Spring Boot;
-- `frontend`: Angular servito da nginx, con proxy `/api` verso il backend.
+- `frontend`: Angular servito da nginx, con proxy `/api` verso il backend;
+- `caddy`: reverse proxy HTTPS davanti a frontend. Terminazione TLS automatica via Let's Encrypt (se `TLS_ENABLED=true`), altrimenti solo HTTP su :80.
 
-### Porte predefinite
+### Porte esposte sull'host
 
-| Servizio | Porta host | Variabile |
+| Servizio | Porta host | Note |
 | --- | ---: | --- |
-| Frontend | `8080` | `FRONTEND_PORT` |
+| Caddy | `80`, `443` | unico servizio raggiungibile dall'esterno |
 
-> Backend e PostgreSQL non sono pubblicati sull'host: vivono solo nella rete Docker.
+> Backend, frontend e PostgreSQL **non** sono pubblicati sull'host: vivono solo nella rete Docker.
 > Il frontend raggiunge il backend via `http://backend:8080`; il backend raggiunge Postgres via `jdbc:postgresql://database:5432/...`.
 
-Esempio:
+### TLS (HTTPS)
 
-```env
-FRONTEND_PORT=8081
-```
+Disabilitato di default (HTTP puro su `http://localhost/`). Per abilitare Let's Encrypt:
+
+1. Punta un record DNS `A` (o `AAAA`) del tuo dominio verso l'IP pubblico del server.
+2. Verifica la propagazione: `dig +short tickets.example.com`.
+3. Rilancia `./configure.sh` e rispondi `y` a "Enable TLS with Let's Encrypt?", quindi fornisci `DOMAIN` e `ACME_EMAIL`.
+4. Riavvia: `docker compose up -d`.
+
+Il cert viene ottenuto al primo avvio e rinnovato automaticamente prima della scadenza.
 
 ### Persistenza Docker
 
-Compose crea tre volumi:
+I dati vivono in `./data/` come bind mount (più comodo da ispezionare e backuppare rispetto ai named volume):
 
-- `postgres_data`: dati PostgreSQL;
-- `attachments_data`: file caricati nelle issue;
-- `branding_data`: loghi delle compagnie e dei progetti.
+- `./data/db/`: dati PostgreSQL;
+- `./data/attachments/`: file caricati nelle issue;
+- `./data/branding/`: loghi delle compagnie e dei progetti;
+- `./data/caddy/`, `./data/caddy-config/`: stato di Caddy (cert Let's Encrypt inclusi).
 
 Per fermare i container senza cancellare i dati:
 
@@ -109,8 +107,31 @@ docker compose down
 Per cancellare anche database e allegati:
 
 ```bash
-docker compose down -v
+rm -rf ./data/db ./data/attachments ./data/branding
 ```
+
+### Backup
+
+Lo script `backup.sh` crea un archivio `tar.gz` di `data/` + `.env` + `Caddyfile` in `backups/` (creato se non esiste), nominato con timestamp UTC ISO-8601:
+
+```bash
+./backup.sh
+# → backups/ticket-platform-2026-09-22T19-34-20Z.tar.gz
+
+./backup.sh --label pre-migration
+# → backups/ticket-platform-2026-09-22T19-34-20Z-pre-migration.tar.gz
+
+BACKUP_DIR=/mnt/external ./backup.sh
+# → scrive su un mount esterno
+```
+
+L'archivio viene creato con mode `0600` perché contiene `JWT_SECRET` e `DB_PASSWORD`. Per ripristinare:
+
+```bash
+tar -xzf backups/ticket-platform-<timestamp>.tar.gz -C /restore/target
+```
+
+I path nell'archivio sono prefissati con `ticket-platform/` per evitare clash in caso di restore in una directory condivisa.
 
 ## Pubblicazione immagini Docker
 
@@ -138,14 +159,16 @@ Valori principali:
 DB_NAME=tickets
 DB_USER=dbatickets
 DB_PASSWORD=change-me-database-password
-DB_PORT=5432
 
 JWT_SECRET=change-me-at-least-32-bytes-long-secret-value
 
 BACKEND_IMAGE=ghcr.io/your-org/sf2-tickets/backend:latest
 FRONTEND_IMAGE=ghcr.io/your-org/sf2-tickets/frontend:latest
 
-FRONTEND_PORT=8080
+# TLS via Let's Encrypt (Caddy). Disabilitato di default.
+TLS_ENABLED=false
+DOMAIN=
+ACME_EMAIL=
 
 ATTACHMENTS_MAX_FILE_SIZE=25MB
 ATTACHMENTS_MAX_REQUEST_SIZE=25M
@@ -178,36 +201,30 @@ SMTP_PASSWORD=password-app
 MAIL_FROM=nome.account@gmail.com
 ```
 
-Il backend usa il logo della compagnia interna nelle email, se presente. Gli allegati vengono salvati nel volume `attachments_data`; i loghi nel volume `branding_data`.
+Il backend usa il logo della compagnia interna nelle email, se presente. Gli allegati vengono salvati in `./data/attachments/`; i loghi in `./data/branding/`.
 
 ## Avvio locale per sviluppo
 
-Per lavorare senza containerizzare backend e frontend, puoi usare Docker solo per PostgreSQL:
+Per sviluppare con hot reload, lo script `scripts/dev.sh` avvia il database in Docker e lancia backend e frontend in locale (Spring Boot + Angular dev server). Richiede Docker, Java 21+, Maven e Node.js.
 
 ```bash
-docker compose up -d database
+./scripts/dev.sh           # foreground: tail dei log, Ctrl+C per fermare tutto
+./scripts/dev.sh --detach  # background: PIDs e path dei log stampati e poi esce
+./scripts/dev.sh --stop    # ferma i processi locali e il database
 ```
 
-Poi avvia il backend localmente. Servono Java 21 o superiore e Maven:
+Cosa fa:
 
-```bash
-export DB_URL=jdbc:postgresql://localhost:5432/tickets
-export DB_USER=dbatickets
-export DB_PASSWORD='password-del-database'
-export JWT_SECRET='una-stringa-segreta-di-almeno-32-caratteri'
-cd backend
-mvn spring-boot:run
-```
+1. `cd` nella root del repo e legge `.env` da lì;
+2. `docker compose up -d database` e attende il healthcheck `healthy`;
+3. esporta le variabili di `.env` (`set -a; . .env; set +a`);
+4. avvia `mvn spring-boot:run` in `backend/` scrivendo il log in `.dev-logs/backend.log`;
+5. avvia `npm start` in `frontend/` scrivendo il log in `.dev-logs/frontend.log`;
+6. cattura `SIGINT`/`SIGTERM` per terminare entrambi i processi locali e fermare il container del database.
 
-In un altro terminale avvia Angular. Servono Node.js e npm:
+Apri <http://localhost:4200/>. Il dev server di Angular inoltra `/api`, incluso l'upgrade WebSocket, al backend tramite `frontend/proxy.conf.json` (default: `http://localhost:8080`). Dopo una modifica a quel file, riavvia `npm start`: Angular legge la configurazione del proxy solo all'avvio.
 
-```bash
-cd frontend
-npm install
-npm start
-```
-
-Apri `http://localhost:4200`. Il server Angular inoltra `/api`, incluso l'upgrade WebSocket, al backend tramite `frontend/proxy.conf.json` (default: backend su `http://localhost:8080`). Dopo una modifica a questo file, riavvia `npm start`: Angular legge la configurazione del proxy all'avvio.
+Se preferisci i passi manuali: `docker compose up -d database`, poi `cd backend && mvn spring-boot:run` e in un altro terminale `cd frontend && npm start`.
 
 ## Note applicative
 
