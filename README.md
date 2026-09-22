@@ -2,6 +2,28 @@
 
 Applicazione ticket completa con backend Spring Boot, frontend Angular, PostgreSQL, Flyway, autenticazione JWT, allegati su filesystem e notifiche email.
 
+## Installazione one-shot
+
+Su una macchina pulita con `curl`, `openssl` e `docker` (con il plugin `compose`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davide-leva/ticket-platform/master/install.sh | bash
+```
+
+Lo script scarica il minimo indispensabile (`compose.yml`, `.env.example`, `scripts/configure.sh`) e lancia `configure.sh`, che genera `.env` (mode `0600`) e `Caddyfile`. Al termine:
+
+```bash
+docker compose up -d
+```
+
+Per skip-prompt interattivi (es. CI / provisioning automatico), passare `NONINTERACTIVE=1` davanti alla pipe:
+
+```bash
+NONINTERACTIVE=1 curl -fsSL https://raw.githubusercontent.com/davide-leva/ticket-platform/master/install.sh | bash
+```
+
+Variabili accettate: `REPO` (default `davide-leva/ticket-platform`), `BRANCH` (default `master`), `DIR` (directory target, default cwd), `NONINTERACTIVE=1`.
+
 ## Avvio rapido con Docker Compose
 
 Ci sono due compose:
