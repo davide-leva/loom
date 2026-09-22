@@ -33,6 +33,11 @@ app:
     max-file-size: ${ATTACHMENTS_MAX_FILE_SIZE:25MB}
   branding:
     root-folder: ${ROOT_FOLDER:./branding}
+  version:
+    value: ${APP_VERSION:dev}
+    commit: ${APP_COMMIT:local}
+    build-time: ${APP_BUILD_TIME:local}
+    api: v1
 
   notifications:
     email:

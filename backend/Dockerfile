@@ -9,8 +9,14 @@ WORKDIR /workspace/backend
 RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_TIME=unknown
 WORKDIR /app
 RUN mkdir -p /data/attachments /data/branding
 COPY --from=build /workspace/backend/target/sf2-tickets-0.1.0-SNAPSHOT.jar /app/app.jar
+ENV APP_VERSION=${VERSION} \
+    APP_COMMIT=${COMMIT} \
+    APP_BUILD_TIME=${BUILD_TIME}
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

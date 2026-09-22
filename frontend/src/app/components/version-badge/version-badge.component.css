@@ -1,0 +1,37 @@
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: default;
+  user-select: text;
+  white-space: nowrap;
+}
+.version-badge:hover { background: #e2e8f0; color: #1e293b; }
+.version-badge .pi { font-size: 11px; opacity: .7; }
+.version-badge__label { font-weight: 600; }
+.version-badge__env {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  background: #cbd5e1;
+  color: #1e293b;
+}
+.version-badge__env.is-dev { background: #fde68a; color: #92400e; }
+
+:host ::ng-deep .p-tooltip .p-tooltip-text {
+  white-space: pre-line;
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}

@@ -9,10 +9,12 @@ import { AuthService } from '../../services/auth/auth.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
 import { IssueNotificationsService } from '../../services/issue-notifications/issue-notifications.service';
+import { VersionService } from '../../services/version/version.service';
+import { VersionBadgeComponent } from '../version-badge/version-badge.component';
 
 @Component({
   selector: 'app-main-layout',
-  imports: [FormsModule, RouterLink, RouterLinkActive, RouterOutlet, ButtonModule, MenuModule, SelectModule],
+  imports: [FormsModule, RouterLink, RouterLinkActive, RouterOutlet, ButtonModule, MenuModule, SelectModule, VersionBadgeComponent],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.css'
 })
@@ -21,6 +23,7 @@ export class MainLayoutComponent implements OnInit {
   readonly projectContext = inject(ProjectContextService);
   readonly liveSync = inject(LiveSyncService);
   readonly notifications = inject(IssueNotificationsService);
+  private readonly version = inject(VersionService);
   private readonly router = inject(Router);
 
   readonly userMenuItems = computed<MenuItem[]>(() => [
@@ -48,6 +51,7 @@ export class MainLayoutComponent implements OnInit {
 
   ngOnInit(): void {
     this.projectContext.load();
+    this.version.load();
   }
 
   logout(): void {

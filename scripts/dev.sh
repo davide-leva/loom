@@ -5,10 +5,15 @@
 # frontend (Angular dev server) locally for hot reload. Sources `.env` from
 # the repo root.
 #
+# Data lives in ./data/{db,attachments,branding,caddy*} as bind mounts and
+# persists across runs. Use --fresh to wipe db/attachments/branding before
+# starting (Caddy state is preserved).
+#
 # Usage:
 #   ./scripts/dev.sh           # run in foreground, tail logs, Ctrl+C to stop
 #   ./scripts/dev.sh --detach  # run in background, return immediately
 #   ./scripts/dev.sh --stop    # kill any prior dev processes and the database
+#   ./scripts/dev.sh --fresh   # wipe ./data/{db,attachments,branding} then start
 #   ./scripts/dev.sh --help
 
 set -euo pipefail
@@ -25,10 +30,12 @@ usage() {
 
 DETACH=0
 ACTION="up"
+FRESH=0
 for arg in "$@"; do
     case "${arg}" in
         --detach|-d) DETACH=1 ;;
         --stop)      ACTION="stop" ;;
+        --fresh)     FRESH=1 ;;
         --help|-h)   usage; exit 0 ;;
         *) echo "Unknown argument: ${arg}" >&2; usage >&2; exit 1 ;;
     esac
@@ -36,10 +43,25 @@ done
 
 cd "${REPO_ROOT}"
 
+# Point git at the versioned .githooks/ directory. Idempotent — only
+# prints on the first run so subsequent runs stay quiet.
+if [[ "$(git config --get core.hooksPath 2>/dev/null || true)" != ".githooks" ]]; then
+    git config core.hooksPath .githooks
+    echo "→ Installed git hooks (core.hooksPath=.githooks)"
+fi
+
 if [[ "${ACTION}" == "stop" ]]; then
     echo "→ Stopping dev processes"
+    # mvn / npm parents (graceful) then any orphaned Java/ng children (force).
+    # spring-boot:run spawns a JVM child whose argv doesn't contain the mvn
+    # pattern, so plain pkill on the parent leaves the child running and
+    # holding port 8080 — hence the broader patterns below.
     pkill -f "mvn spring-boot:run" 2>/dev/null && echo "  ✓ stopped mvn spring-boot:run" || echo "  - mvn not running"
     pkill -f "ng serve"            2>/dev/null && echo "  ✓ stopped ng serve"            || echo "  - ng not running"
+    sleep 1
+    pkill -9 -f "TicketsApplication"           2>/dev/null || true
+    pkill -9 -f "ng serve"                     2>/dev/null || true
+    pkill -9 -f "@angular/cli"                 2>/dev/null || true
     docker compose -f "${COMPOSE_FILE}" stop database 2>/dev/null \
         && echo "  ✓ stopped database container" \
         || echo "  - database not running"
@@ -58,6 +80,20 @@ command -v npm    >/dev/null 2>&1 || { echo "npm is required" >&2; exit 1; }
 [[ -d "${REPO_ROOT}/frontend" ]] || { echo "frontend/ not found" >&2; exit 1; }
 
 mkdir -p "${LOG_DIR}"
+
+# --- 0b. optional: wipe persisted data --------------------------------------
+if [[ "${FRESH}" -eq 1 ]]; then
+    echo "→ --fresh: wiping ./data/{db,attachments,branding}"
+    docker compose -f "${COMPOSE_FILE}" stop database >/dev/null 2>&1 || true
+    for sub in db attachments branding; do
+        if [[ -d "${REPO_ROOT}/data/${sub}" ]]; then
+            rm -rf "${REPO_ROOT}/data/${sub}"
+            echo "  ✓ removed data/${sub}"
+        fi
+        mkdir -p "${REPO_ROOT}/data/${sub}"
+    done
+    echo "  (data/caddy* left intact — TLS certs and proxy config preserved)"
+fi
 
 # --- 1. database via compose ------------------------------------------------
 echo "→ Starting database via compose"
@@ -90,6 +126,20 @@ set -a
 . "${ENV_FILE}"
 set +a
 
+# --- 2b. derive build metadata from git so the backend's /api/version -------
+# ---     shows the real commit and timestamp instead of "local"/"local" -----
+# APP_VERSION stays "dev" in local — the badge treats that label specially
+# (shows "dev" instead of "vdev" and Ambiente as "dev"). CI/Docker build
+# overrides APP_VERSION with the real SemVer from the VERSION file, so
+# production still displays v0.0.1 / Ambiente: production.
+APP_VERSION="${APP_VERSION:-dev}"
+APP_COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short=8 HEAD 2>/dev/null || echo "local")"
+APP_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "local")"
+APP_ENV="${APP_ENV:-dev}"
+
+export APP_VERSION APP_COMMIT APP_BUILD_TIME APP_ENV
+echo "→ Build metadata: ${APP_VERSION} · ${APP_COMMIT} · ${APP_BUILD_TIME} (env: ${APP_ENV})"
+
 # --- 3. backend (mvn spring-boot:run) ---------------------------------------
 echo "→ Starting backend (mvn spring-boot:run)"
 (cd "${REPO_ROOT}/backend"  && exec mvn spring-boot:run) \
@@ -115,19 +165,33 @@ cleanup() {
     kill "${FRONTEND_PID}" 2>/dev/null || true
     wait "${BACKEND_PID}"  "${FRONTEND_PID}" 2>/dev/null || true
     pkill -P $$ 2>/dev/null || true
+    # Catch orphaned children that survived the parent (Spring Boot's JVM,
+    # Angular CLI's node workers). Force-kill since the parents are gone.
+    sleep 1
+    pkill -9 -f "TicketsApplication" 2>/dev/null || true
+    pkill -9 -f "ng serve"            2>/dev/null || true
+    pkill -9 -f "@angular/cli"        2>/dev/null || true
     docker compose -f "${COMPOSE_FILE}" stop database >/dev/null 2>&1 || true
     echo "  ✓ stopped"
-    exit 0
 }
-trap cleanup INT TERM EXIT
+# Only trap signals — letting EXIT fire would kill the children on --detach
+# when the script returns normally. Foreground mode calls cleanup explicitly.
+trap cleanup INT TERM
 
 if [[ "${DETACH}" -eq 1 ]]; then
     echo "(detached — re-run with --stop to terminate, or use scripts/dev.sh --stop)"
     exit 0
 fi
 
-# foreground: tail both logs
+# foreground: tail both logs, clean up when the tail exits
 echo "→ Tailing logs (Ctrl+C to stop)"
+cleanup_on_tail_exit() {
+    cleanup
+    exit 0
+}
+trap cleanup_on_tail_exit INT TERM EXIT
 tail -F -q "${LOG_DIR}/backend.log" "${LOG_DIR}/frontend.log" &
 TAIL_PID=$!
 wait "${TAIL_PID}"
+cleanup
+exit 0

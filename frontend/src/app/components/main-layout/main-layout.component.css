@@ -46,7 +46,7 @@
   line-height: 1;
 }
 
-.header-actions { display: flex; align-items: end; gap: 12px; margin-left: auto; }
+.header-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .live-status { display: inline-flex; align-items: center; gap: 6px; align-self: center; color: #a16207; font-size: 12px; white-space: nowrap; }
 .live-status.connected { color: #15803d; }
 .live-status .pi { font-size: 9px; }

@@ -46,6 +46,7 @@
           {{ liveSync.connected() ? 'Live' : 'Riconnessione...' }}
         </span>
       }
+      <app-version-badge />
       <label class="project-picker">
         <p-select inputId="current-project" [options]="projectContext.projects()"
                   optionLabel="name" optionValue="id" [ngModel]="projectContext.currentProjectId()"

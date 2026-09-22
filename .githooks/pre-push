@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# .githooks/pre-push — block pushes that change code without bumping VERSION.
+#
+# Activated once per clone by `git config core.hooksPath .githooks`. The
+# `scripts/dev.sh` script sets this idempotently on first run so you don't
+# have to remember. CI mirrors this check in .github/workflows/version-check.yml
+# for the cases where someone bypasses the hook.
+
+set -euo pipefail
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+exec bash "${REPO_ROOT}/scripts/check-version-bump.sh"

@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth/auth.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
 import { IssueNotificationsService } from '../../services/issue-notifications/issue-notifications.service';
+import { VersionService } from '../../services/version/version.service';
 import type { CurrentUser, ProjectSummary } from '../../shared/models/auth.types';
 
 describe('MainLayoutComponent', () => {
@@ -23,6 +24,8 @@ describe('MainLayoutComponent', () => {
                         projects: () => ProjectSummary[]; loadError: () => boolean };
   let liveSync: { watch: jest.Mock; revision: () => number; connected: () => boolean };
   let notifications: { refresh: jest.Mock; clear: jest.Mock; count: jest.Mock; isUnread: jest.Mock };
+  let versionInfoSignal: ReturnType<typeof signal<unknown>>;
+  let version: { load: jest.Mock; info: typeof versionInfoSignal };
 
   beforeEach(async () => {
     sessionStorage.clear();
@@ -47,6 +50,8 @@ describe('MainLayoutComponent', () => {
       connected: () => connectedSignal()
     };
     notifications = { refresh: jest.fn(), clear: jest.fn(), count: jest.fn(() => 0), isUnread: jest.fn(() => false) };
+    versionInfoSignal = signal<unknown>(null);
+    version = { load: jest.fn(), info: versionInfoSignal };
 
     await TestBed.configureTestingModule({
       imports: [MainLayoutComponent],
@@ -55,7 +60,8 @@ describe('MainLayoutComponent', () => {
         { provide: AuthService, useValue: { ...auth, user: userSignal } },
         { provide: ProjectContextService, useValue: projectContext },
         { provide: LiveSyncService, useValue: liveSync },
-        { provide: IssueNotificationsService, useValue: notifications }
+        { provide: IssueNotificationsService, useValue: notifications },
+        { provide: VersionService, useValue: version }
       ]
     }).compileComponents();
 
