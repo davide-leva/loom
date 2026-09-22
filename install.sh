@@ -49,15 +49,13 @@ echo
 echo "→ Running scripts/configure.sh ${ARGS[*]:-}"
 bash scripts/configure.sh "${ARGS[@]}"
 
-cat <<EOF
-
-✓ Stack files are in place in ${DIR}.
-
-Next:
-  cd ${DIR}
-  docker compose up -d
-
-Then open:
-  - http://localhost/          (TLS_ENABLED=false)
-  - https://<your-domain>/     (TLS_ENABLED=true)
-EOF
+echo
+echo "✓ Stack files are in place in ${DIR}."
+echo
+echo "Start the stack:"
+echo "  cd ${DIR}"
+echo "  docker compose up -d"
+echo
+echo "Open in the browser:"
+echo "  http://localhost/        (when TLS_ENABLED=false)"
+echo "  https://<your-domain>/   (when TLS_ENABLED=true)"
