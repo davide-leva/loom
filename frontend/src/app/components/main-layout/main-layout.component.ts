@@ -10,6 +10,7 @@ import { ProjectContextService } from '../../services/project-context/project-co
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
 import { IssueNotificationsService } from '../../services/issue-notifications/issue-notifications.service';
 import { VersionService } from '../../services/version/version.service';
+import { LOOM_LOGO_URL } from '../../shared/brand-assets';
 import { VersionBadgeComponent } from '../version-badge/version-badge.component';
 
 @Component({
@@ -25,6 +26,8 @@ export class MainLayoutComponent implements OnInit {
   readonly notifications = inject(IssueNotificationsService);
   private readonly version = inject(VersionService);
   private readonly router = inject(Router);
+
+  readonly loomLogoUrl = LOOM_LOGO_URL;
 
   readonly userMenuItems = computed<MenuItem[]>(() => [
     { label: `Compagnia: ${this.auth.user()?.companyName ?? this.auth.user()?.internalCompanyName ?? 'Interna'}`,

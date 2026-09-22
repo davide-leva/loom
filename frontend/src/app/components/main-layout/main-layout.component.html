@@ -4,7 +4,10 @@
       @if (auth.user()?.internalLogoUrl; as logo) {
         <img [src]="logo" [alt]="'Logo ' + (auth.user()?.internalCompanyName ?? 'compagnia interna')" />
       } @else {
-        <span>{{ auth.user()?.internalCompanyName ?? 'Tickets' }}</span>
+        <img [src]="loomLogoUrl" alt="Loom" />
+        @if (auth.user()?.internalCompanyName) {
+          <span>{{ auth.user()?.internalCompanyName }}</span>
+        }
       }
       @if (auth.user()?.role === 'USER' || auth.user()?.role === 'SUPERUSER') {
         @if (auth.user()?.companyLogoUrl; as customerLogo) {

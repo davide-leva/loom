@@ -10,16 +10,19 @@
 .login-content { width: min(100%, 600px); }
 
 .brand { position: relative; margin: 0 auto 48px; text-align: center; }
-.brand img { display: block; width: 50%; margin: auto; height: auto; }
-.brand span {
+.brand-row { display: inline-flex; align-items: center; gap: 14px; }
+.brand-row img { display: block; height: 56px; max-width: 180px; width: auto; object-fit: contain; }
+.brand-row span {
   display: inline-block;
-  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid #dbe2ea;
   color: var(--p-primary-600);
   font-size: 16px;
   font-weight: 600;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.brand-logotype { display: block; width: 50%; max-width: 220px; margin: 14px auto 0; height: auto; }
 
 :host ::ng-deep .login-card { display: block; width: min(100%, 380px); margin: auto; }
 :host ::ng-deep .login-card .p-card-body { padding: 24px; }
