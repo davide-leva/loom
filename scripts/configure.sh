@@ -226,6 +226,14 @@ ${DOMAIN} {
     encode zstd gzip
 
     reverse_proxy frontend:80 {
+        # Force HTTP/1.1 cleartext to the upstream so WebSocket upgrades
+        # (used by /api/work/live) work reliably through this proxy hop.
+        # Caddy 2 + HTTP/2 to nginx does not pass the standard WebSocket
+        # upgrade mechanism (RFC 8441 Extended CONNECT is not implemented
+        # by nginx to upstream). h1c = HTTP/1.1 cleartext.
+        transport http {
+            versions h1c
+        }
         header_up Host {host}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}
@@ -252,6 +260,14 @@ else
     encode zstd gzip
 
     reverse_proxy frontend:80 {
+        # Force HTTP/1.1 cleartext to the upstream so WebSocket upgrades
+        # (used by /api/work/live) work reliably through this proxy hop.
+        # Caddy 2 + HTTP/2 to nginx does not pass the standard WebSocket
+        # upgrade mechanism (RFC 8441 Extended CONNECT is not implemented
+        # by nginx to upstream). h1c = HTTP/1.1 cleartext.
+        transport http {
+            versions h1c
+        }
         header_up Host {host}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-For {remote_host}

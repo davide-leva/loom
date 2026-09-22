@@ -1,11 +1,27 @@
 #!/usr/bin/env bash
 # .githooks/pre-push — block pushes that change code without bumping VERSION.
 #
-# Activated once per clone by `git config core.hooksPath .githooks`. The
-# `scripts/dev.sh` script sets this idempotently on first run so you don't
-# have to remember. CI mirrors this check in .github/workflows/version-check.yml
-# for the cases where someone bypasses the hook.
+# Reads push ranges from stdin (git's pre-push protocol):
+#   <local_ref> <local_sha> <remote_ref> <remote_sha>
+# and runs check-version-bump.sh against each one. Branch deletions
+# and unchanged refs are skipped.
 
 set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-exec bash "${REPO_ROOT}/scripts/check-version-bump.sh"
+
+ANY_FAILED=0
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+    # Skip deletions and no-op pushes (zero SHA or identical SHAs).
+    if [[ "${LOCAL_SHA}" =~ ^0+$ ]] || [[ -z "${LOCAL_SHA}" ]]; then
+        continue
+    fi
+    if [[ "${LOCAL_SHA}" == "${REMOTE_SHA}" ]]; then
+        continue
+    fi
+    RANGE="${REMOTE_SHA}..${LOCAL_SHA}"
+    if ! bash "${REPO_ROOT}/scripts/check-version-bump.sh" "${RANGE}"; then
+        ANY_FAILED=1
+    fi
+done
+
+[[ "${ANY_FAILED}" -eq 0 ]] || exit 1
