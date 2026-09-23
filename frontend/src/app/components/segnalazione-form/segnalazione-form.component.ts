@@ -31,7 +31,7 @@ export interface SegnalazioneFormModel {
             <div class="segnalazione-form-field span-2">
               <label>Titolo *</label>
               <input pInputText name="segnalazione-title" [(ngModel)]="model.title" required maxlength="255"
-                     placeholder="Titolo della segnalazione" />
+                     [disabled]="!canEditStandard" placeholder="Titolo della segnalazione" />
             </div>
           }
 
@@ -40,31 +40,38 @@ export interface SegnalazioneFormModel {
               <div class="segnalazione-form-field" [class.span-2]="field.type === 'TEXTAREA'">
                 <label>
                   {{ field.label }}@if (field.mandatory) { <span> *</span> }
+                  @if (!isFieldEditable(field)) { <span class="readonly-hint">(solo lettura)</span> }
                 </label>
                 @switch (field.type) {
                   @case ('TEXT') {
                     <input pInputText [name]="'field-' + field.id" [(ngModel)]="model.values[field.id]"
-                           [required]="field.mandatory" [placeholder]="field.code" />
+                           [required]="field.mandatory && isFieldEditable(field)"
+                           [disabled]="!isFieldEditable(field)" [placeholder]="field.code" />
                   }
                   @case ('TEXTAREA') {
                     <textarea [name]="'field-' + field.id" [(ngModel)]="model.values[field.id]"
-                              [required]="field.mandatory" rows="3" [placeholder]="field.code"></textarea>
+                              [required]="field.mandatory && isFieldEditable(field)"
+                              [disabled]="!isFieldEditable(field)" rows="3" [placeholder]="field.code"></textarea>
                   }
                   @case ('NUMBER') {
                     <input pInputText type="number" [name]="'field-' + field.id" [(ngModel)]="model.values[field.id]"
-                           [required]="field.mandatory" placeholder="0" />
+                           [required]="field.mandatory && isFieldEditable(field)"
+                           [disabled]="!isFieldEditable(field)" placeholder="0" />
                   }
                   @case ('SELECT') {
                     @if (field.multiple) {
                       <p-multiselect [name]="'field-' + field.id" [options]="activeOptionsFor(field)"
                                      optionLabel="label" optionValue="value" [(ngModel)]="model.values[field.id]"
-                                     [required]="field.mandatory" placeholder="Seleziona valori"
+                                     [required]="field.mandatory && isFieldEditable(field)"
+                                     [disabled]="!isFieldEditable(field)"
+                                     placeholder="Seleziona valori"
                                      display="chip" appendTo="body" />
                     } @else {
                       <p-select [name]="'field-' + field.id" [options]="activeOptionsFor(field)"
                                 optionLabel="label" optionValue="value" [(ngModel)]="model.values[field.id]"
-                                [required]="field.mandatory" placeholder="Seleziona un valore"
-                                appendTo="body" />
+                                [required]="field.mandatory && isFieldEditable(field)"
+                                [disabled]="!isFieldEditable(field)"
+                                placeholder="Seleziona un valore" appendTo="body" />
                     }
                   }
                 }
@@ -78,12 +85,14 @@ export interface SegnalazioneFormModel {
             <div class="segnalazione-form-field span-2">
               <label>Descrizione *</label>
               <textarea name="segnalazione-description" [(ngModel)]="model.description" required rows="4"
+                        [disabled]="!canEditStandard"
                         placeholder="Descrizione dettagliata della richiesta o anomalia."></textarea>
             </div>
 
             @if (showInternalControl) {
               <label class="segnalazione-form-check span-2">
-                <p-checkbox name="segnalazione-internal" [(ngModel)]="model.internal" [binary]="true" inputId="segnalazione-internal" />
+                <p-checkbox name="segnalazione-internal" [(ngModel)]="model.internal" [binary]="true"
+                            [disabled]="!canEditInternal" inputId="segnalazione-internal" />
                 <span>Visibile solo internamente</span>
               </label>
             }
@@ -94,10 +103,12 @@ export interface SegnalazioneFormModel {
               <div class="segnalazione-form-field span-2">
                 <label>
                   {{ field.label }}@if (field.mandatory) { <span> *</span> }
+                  @if (!isFieldEditable(field)) { <span class="readonly-hint">(solo lettura)</span> }
                 </label>
                 <p-fileupload mode="advanced" styleClass="app-file-upload" [multiple]="field.multiple" [customUpload]="true"
                               [showUploadButton]="false" [auto]="false" chooseLabel="Seleziona file"
-                              cancelLabel="Svuota" (onSelect)="setFiles(field.id, $event)"
+                              cancelLabel="Svuota" [disabled]="!isFieldEditable(field)"
+                              (onSelect)="setFiles(field.id, $event)"
                               (onClear)="clearFiles(field.id)" (onRemove)="removeFile(field.id, $event)" />
                 @if (field.description) { <small class="field-description">{{ field.description }}</small> }
                 @else if (field.multiple) { <small>Permette più file.</small> }
@@ -117,8 +128,11 @@ export class SegnalazioneFormComponent {
   @Input() optionsByField = new Map<number, SegnalazioneCampoOpzione[]>();
   @Input() formTitle: string | null = null;
   @Input() visibleScopes: FieldScope[] = ['USER'];
+  @Input() editableScopes: FieldScope[] = ['USER'];
   @Input() showStandardFields = true;
   @Input() showInternalControl = false;
+  @Input() canEditStandard = true;
+  @Input() canEditInternal = false;
 
   orderedFields(): SegnalazioneCampo[] {
     const userFields = this.fields.filter(field => this.visibleScopes.includes(field.scope));
@@ -126,6 +140,10 @@ export class SegnalazioneFormComponent {
       ...userFields.filter(field => field.type !== 'ATTACHMENTS'),
       ...userFields.filter(field => field.type === 'ATTACHMENTS')
     ];
+  }
+
+  isFieldEditable(field: SegnalazioneCampo): boolean {
+    return this.editableScopes.includes(field.scope);
   }
 
   activeOptionsFor(field: SegnalazioneCampo): SegnalazioneCampoOpzione[] {

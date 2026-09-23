@@ -85,7 +85,10 @@
           <label for="detail-field-type">Tipo *</label>
           <p-select inputId="detail-field-type" name="detailType" [options]="typeOptions"
                     optionLabel="label" optionValue="value" [(ngModel)]="fieldDraft.type"
-                    appendTo="body" />
+                    [disabled]="lockedStructure" appendTo="body" />
+          @if (lockedStructure) {
+            <small>Il campo è già usato da segnalazioni esistenti: tipo e molteplicità non sono modificabili.</small>
+          }
         </div>
         <div class="form-field">
           <label for="detail-field-scope">Scope *</label>
@@ -99,7 +102,8 @@
             <span>Obbligatorio</span>
           </label>
           <label class="check-row">
-            <input type="checkbox" name="detailMultiple" [(ngModel)]="fieldDraft.multiple" />
+            <input type="checkbox" name="detailMultiple" [(ngModel)]="fieldDraft.multiple"
+                   [disabled]="lockedStructure" />
             <span>Permette più valori</span>
           </label>
         </div>

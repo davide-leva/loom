@@ -25,18 +25,9 @@ export class VersionBadgeComponent {
     const lines = [
       `Versione: ${i.version}`,
       `Build: ${this.formatBuildTime(i.buildTime)}`,
-      `Commit: ${this.shortCommit(i.commit)}`,
-      `API: ${i.api}`,
-      `Ambiente: ${i.environment}`,
-      `API base: ${location.origin}`
     ];
     return lines.join('\n');
   });
-
-  private shortCommit(commit: string): string {
-    if (commit.length > 12) return commit.slice(0, 12);
-    return commit;
-  }
 
   private formatBuildTime(raw: string): string {
     if (raw === 'local' || raw === 'unknown' || !raw) return raw;

@@ -21,7 +21,8 @@ import type { SegnalazioneCampo, SegnalazioneCampoOpzione, SegnalazioneCampoValo
           <p class="loading-message">Carico campi del progetto...</p>
         } @else {
           <app-segnalazione-form [model]="formModel" [fields]="fields" [optionsByField]="optionsByField"
-                          [visibleScopes]="visibleScopes()" [showInternalControl]="isInternalUser()" />
+                          [visibleScopes]="visibleScopes()" [editableScopes]="editableScopes()"
+                          [showInternalControl]="isInternalUser()" [canEditInternal]="isInternalUser()" />
         }
 
         @if (error) {
@@ -150,7 +151,7 @@ export class SegnalazioneCreateDialogComponent {
 
   private mandatoryFieldsFilled(): boolean {
     return this.fields
-      .filter(field => this.visibleScopes().includes(field.scope) && field.mandatory && field.type !== 'ATTACHMENTS')
+      .filter(field => this.editableScopes().includes(field.scope) && field.mandatory && field.type !== 'ATTACHMENTS')
       .every(field => {
         const value = this.formModel.values[field.id];
         return Array.isArray(value) ? value.length > 0 : (value ?? '').trim().length > 0;
@@ -159,7 +160,7 @@ export class SegnalazioneCreateDialogComponent {
 
   private customValues(): SegnalazioneCampoValoreInput[] {
     return this.fields
-      .filter(field => this.visibleScopes().includes(field.scope) && field.type !== 'ATTACHMENTS')
+      .filter(field => this.editableScopes().includes(field.scope) && field.type !== 'ATTACHMENTS')
       .flatMap(field => {
         const rawValue = this.formModel.values[field.id];
         const values = Array.isArray(rawValue) ? rawValue : [rawValue];
@@ -176,7 +177,19 @@ export class SegnalazioneCreateDialogComponent {
   }
 
   visibleScopes(): FieldScope[] {
-    return this.isInternalUser() ? ['USER', 'TEAM'] : ['USER'];
+    const role = this.auth.user()?.role;
+    if (role === 'ADMIN') return ['USER', 'TEAM', 'SUPERUSER'];
+    if (role === 'TEAM') return ['USER', 'TEAM', 'SUPERUSER'];
+    if (role === 'SUPERUSER') return ['USER', 'SUPERUSER'];
+    return ['USER'];
+  }
+
+  editableScopes(): FieldScope[] {
+    const role = this.auth.user()?.role;
+    if (role === 'ADMIN') return ['USER', 'TEAM', 'SUPERUSER'];
+    if (role === 'TEAM') return ['USER', 'TEAM'];
+    if (role === 'SUPERUSER') return ['USER', 'SUPERUSER'];
+    return ['USER'];
   }
 
   private groupOptions(options: SegnalazioneCampoOpzione[]): Map<number, SegnalazioneCampoOpzione[]> {

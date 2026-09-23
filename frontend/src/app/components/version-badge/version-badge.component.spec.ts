@@ -41,4 +41,13 @@ describe('VersionBadgeComponent', () => {
 
     expect(fixture.nativeElement.textContent).toContain('dev');
   });
+
+  it('hides environment pill in production', () => {
+    infoSignal.set({ version: '1.2.3', commit: 'abc1234567890',
+      buildTime: '2026-09-22T14:30:15Z', environment: 'production', api: 'v1' });
+    fixture.detectChanges();
+
+    const envPill = fixture.nativeElement.querySelector('.version-badge__env');
+    expect(envPill).toBeNull();
+  });
 });

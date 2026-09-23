@@ -2,13 +2,13 @@
       role="status"
       [attr.aria-label]="tooltipText()"
       [pTooltip]="tooltipText()"
-      tooltipPosition="bottom"
+      tooltipPosition="top"
       [escape]="false"
       showDelay="150"
       hideDelay="50">
   <i class="pi pi-code" aria-hidden="true"></i>
   <span class="version-badge__label">{{ label() }}</span>
-  @if (info()?.environment; as env) {
-    <span class="version-badge__env" [class.is-dev]="env === 'dev'">{{ env }}</span>
+  @if (info()?.environment === 'dev') {
+    <span class="version-badge__env is-dev">dev</span>
   }
 </span>

@@ -54,7 +54,35 @@
 :host ::ng-deep .project-picker .p-select { width: 190px; }
 .project-logo { display: block; max-width: 125px; height: 27px; object-fit: contain; }
 
-.page-content { width: 95%; max-width: 2000px; margin: 0 auto; padding: 24px 0; }
+.page-content { width: 95%; max-width: 2000px; margin: 0 auto; padding: 24px 0; flex: 1; }
+
+.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 24px;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  font-size: 11px;
+  color: #6b7280;
+}
+.app-footer__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--p-primary-600);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.app-footer__brand img { display: block; height: 48px; max-width: 80px; object-fit: contain; }
+.app-footer__brand span { font-size: 11px; }
+.app-footer__status { display: inline-flex; align-items: center; gap: 14px; }
+.app-footer__status .live-status { font-size: 11px; }
 
 @media (max-width: 1100px) {
   .app-header { flex-wrap: wrap; gap: 8px 16px; }

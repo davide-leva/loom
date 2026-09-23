@@ -37,7 +37,7 @@ function project(partial: Partial<Project>): Project {
 function field(partial: Partial<SegnalazioneCampo>): SegnalazioneCampo {
   return {
     id: 1, projectId: 1, code: 'X', label: 'X', description: null,
-    type: 'TEXT', scope: 'USER', mandatory: false, multiple: false,
+    type: 'TEXT', scope: 'USER', mandatory: false, multiple: false, hasValues: false,
     ...partial
   } as SegnalazioneCampo;
 }

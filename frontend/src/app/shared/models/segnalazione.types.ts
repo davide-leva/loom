@@ -17,6 +17,7 @@ export interface SegnalazioneCampo {
   multiple: boolean;
   type: FieldType;
   scope: FieldScope;
+  hasValues: boolean;
 }
 
 export interface SegnalazioneCampoOpzione {

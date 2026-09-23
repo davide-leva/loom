@@ -60,24 +60,13 @@ import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio,
             <h3>Descrizione</h3>
             <p class="description">{{ detail.issue.description }}</p>
 
-            @if (displayValues().length) {
-              <h3>Campi</h3>
-              <dl class="values-list">
-                @for (value of displayValues(); track value.id) {
-                  <div>
-                    <dt>{{ value.label }}</dt>
-                    <dd>{{ value.value }}</dd>
-                  </div>
-                }
-              </dl>
-            }
-
-            @if (canEditTeamFields() && teamFields.length) {
-              <div class="team-fields-editor">
-                <app-segnalazione-form [model]="teamFormModel" [fields]="teamFields" [optionsByField]="optionsByField"
-                                [visibleScopes]="['TEAM']" [showStandardFields]="false"
-                                formTitle="Campi team" />
-              </div>
+            @if (projectFields.length) {
+              <app-segnalazione-form [model]="fieldsFormModel" [fields]="projectFields"
+                                     [optionsByField]="optionsByField"
+                                     [visibleScopes]="visibleFieldScopes()"
+                                     [editableScopes]="editableFieldScopes()"
+                                     [showStandardFields]="false"
+                                     formTitle="Dati Aggiuntivi" />
             }
 
             <h3>Allegati</h3>
@@ -112,9 +101,9 @@ import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio,
 
             @if (showIssueActions()) {
               <div class="azioni-segnalazione">
-                @if (canEditTeamFields() && teamFields.length) {
-                  <p-button label="Salva campi team" icon="pi pi-save" [loading]="teamFieldsSaving"
-                            [disabled]="!teamFieldsValid()" (onClick)="saveTeamFields()" />
+                @if (canEditAnyField() && projectFields.length) {
+                  <p-button label="Salva modifiche" icon="pi pi-save" [loading]="fieldsSaving"
+                            [disabled]="!fieldsValid()" (onClick)="saveIssueFields()" />
                 }
                 @if (canApprove()) {
                   <p-button label="Approva" icon="pi pi-check" [loading]="approving" (onClick)="approve()" />
@@ -207,13 +196,13 @@ export class SegnalazioneDetailDialogComponent {
   archiving = false;
   deleting = false;
   commentSaving = false;
-  teamFieldsSaving = false;
+  fieldsSaving = false;
   error = '';
   commentDraft = '';
   detail: SegnalazioneDettaglio | null = null;
-  teamFields: SegnalazioneCampo[] = [];
+  projectFields: SegnalazioneCampo[] = [];
   optionsByField = new Map<number, SegnalazioneCampoOpzione[]>();
-  teamFormModel: SegnalazioneFormModel = { title: '', description: '', values: {}, attachments: {}, internal: false };
+  fieldsFormModel: SegnalazioneFormModel = { title: '', description: '', values: {}, attachments: {}, internal: false };
   previewVisible = false;
   previewLoading = false;
   previewIndex = -1;
@@ -246,10 +235,11 @@ export class SegnalazioneDetailDialogComponent {
         if (sequence !== this.loadSequence || issueId !== this.issueId) return;
         this.detail = detail;
         this.syncAttachmentPreviews(detail.attachments);
-        if (this.canEditTeamFields() && !refresh) {
-          this.loadTeamSchema(detail.issue.projectId);
+        if (!refresh) {
+          this.loadProjectSchema(detail.issue.projectId);
         } else {
           this.loading = false;
+          this.fillFieldsForm();
         }
       },
       error: (error: unknown) => {
@@ -265,35 +255,52 @@ export class SegnalazioneDetailDialogComponent {
     });
   }
 
-  private loadTeamSchema(projectId: number): void {
+  private loadProjectSchema(projectId: number): void {
     forkJoin({
       fields: this.segnalazioniApi.segnalazioneCampi(projectId),
       options: this.segnalazioniApi.segnalazioneCampoOpzioni(projectId)
     }).subscribe({
       next: ({ fields, options }) => {
-        this.teamFields = fields.filter(field => field.scope === 'TEAM')
+        this.projectFields = [...fields]
+          .filter(field => this.visibleFieldScopes().includes(field.scope))
           .sort((a, b) => a.code.localeCompare(b.code, 'it'));
         this.optionsByField = this.groupOptions(options);
-        this.fillTeamForm();
+        this.fillFieldsForm();
         this.loading = false;
       },
       error: () => {
-        this.error = 'Non riesco a caricare i campi team.';
+        this.error = 'Non riesco a caricare i campi del progetto.';
         this.loading = false;
       }
     });
   }
 
-  private fillTeamForm(): void {
+  private fillFieldsForm(): void {
     const values: SegnalazioneFormModel['values'] = {};
-    for (const field of this.teamFields) {
+    for (const field of this.projectFields) {
       const fieldValues = (this.detail?.values ?? [])
         .filter(value => value.definitionId === field.id)
         .sort((a, b) => a.position - b.position)
         .map(value => value.value);
       values[field.id] = field.multiple ? fieldValues : (fieldValues[0] ?? '');
     }
-    this.teamFormModel = { title: '', description: '', values, attachments: {}, internal: false };
+    this.fieldsFormModel = { title: '', description: '', values, attachments: {}, internal: false };
+  }
+
+  visibleFieldScopes(): Array<'USER' | 'SUPERUSER' | 'TEAM'> {
+    const role = this.auth.user()?.role;
+    if (role === 'ADMIN') return ['USER', 'TEAM', 'SUPERUSER'];
+    if (role === 'TEAM') return ['USER', 'TEAM', 'SUPERUSER'];
+    if (role === 'SUPERUSER') return ['USER', 'SUPERUSER'];
+    return ['USER'];
+  }
+
+  editableFieldScopes(): Array<'USER' | 'SUPERUSER' | 'TEAM'> {
+    const role = this.auth.user()?.role;
+    if (role === 'ADMIN') return ['USER', 'TEAM', 'SUPERUSER'];
+    if (role === 'TEAM') return ['USER', 'TEAM'];
+    if (role === 'SUPERUSER') return ['USER', 'SUPERUSER'];
+    return ['USER'];
   }
 
   canApprove(): boolean {
@@ -310,45 +317,58 @@ export class SegnalazioneDetailDialogComponent {
     return role === 'ADMIN' && !!segnalazione && segnalazione.status === 'APPROVED';
   }
 
-  canEditTeamFields(): boolean {
-    const role = this.auth.user()?.role;
-    return role === 'TEAM' || role === 'ADMIN';
+  canEditAnyField(): boolean {
+    return this.editableFieldScopes().length > 0;
   }
 
   showIssueActions(): boolean {
-    return (this.canEditTeamFields() && this.teamFields.length > 0)
+    return (this.canEditAnyField() && this.projectFields.length > 0)
       || this.canApprove() || this.canArchive() || this.canDeleteIssue();
   }
 
-  displayValues() {
-    const teamFieldIds = new Set(this.teamFields.map(field => field.id));
-    return (this.detail?.values ?? []).filter(value => !teamFieldIds.has(value.definitionId));
-  }
-
-  teamFieldsValid(): boolean {
-    return this.teamFields
-      .filter(field => field.mandatory && field.type !== 'ATTACHMENTS')
+  fieldsValid(): boolean {
+    const editableIds = new Set(this.projectFields
+      .filter(field => this.editableFieldScopes().includes(field.scope))
+      .map(field => field.id));
+    return this.projectFields
+      .filter(field => editableIds.has(field.id) && field.mandatory && field.type !== 'ATTACHMENTS')
       .every(field => {
-        const value = this.teamFormModel.values[field.id];
+        const value = this.fieldsFormModel.values[field.id];
         return Array.isArray(value) ? value.length > 0 : (value ?? '').trim().length > 0;
       });
   }
 
-  saveTeamFields(): void {
-    if (!this.detail || !this.canEditTeamFields() || !this.teamFieldsValid() || this.teamFieldsSaving) return;
-    this.teamFieldsSaving = true;
-    this.segnalazioniApi.updateIssueValues(this.detail.issue.id, this.teamValues()).subscribe({
+  saveIssueFields(): void {
+    if (!this.detail || !this.canEditAnyField() || !this.fieldsValid() || this.fieldsSaving) return;
+    this.fieldsSaving = true;
+    this.error = '';
+    this.segnalazioniApi.updateIssueValues(this.detail.issue.id, this.editableValues()).subscribe({
       next: detail => {
         this.detail = detail;
         this.syncAttachmentPreviews(detail.attachments);
-        this.fillTeamForm();
-        this.teamFieldsSaving = false;
+        this.fillFieldsForm();
+        this.fieldsSaving = false;
       },
-      error: () => {
-        this.error = 'Non riesco a salvare i campi team.';
-        this.teamFieldsSaving = false;
+      error: (response: unknown) => {
+        this.fieldsSaving = false;
+        this.error = this.fieldSaveErrorMessage(response);
       }
     });
+  }
+
+  private fieldSaveErrorMessage(response: unknown): string {
+    if (response instanceof HttpErrorResponse) {
+      const backendMessage = typeof response.error?.message === 'string'
+        ? response.error.message
+        : typeof response.error === 'string' ? response.error : '';
+      if (backendMessage) return `Salvataggio non riuscito: ${backendMessage}`;
+      if (response.status === 400) return 'Salvataggio non riuscito: alcuni campi non sono validi.';
+      if (response.status === 403) return 'Salvataggio non riuscito: non hai i permessi per modificare questi campi.';
+      if (response.status === 404) return 'Salvataggio non riuscito: segnalazione non trovata.';
+      if (response.status === 410) return 'Salvataggio non riuscito: la segnalazione è stata archiviata o eliminata.';
+      if (response.status === 0) return 'Salvataggio non riuscito: errore di rete.';
+    }
+    return 'Non riesco a salvare i campi della segnalazione.';
   }
 
   approve(): void {
@@ -567,11 +587,12 @@ export class SegnalazioneDetailDialogComponent {
     this.attachmentBlobs.clear();
   }
 
-  private teamValues(): SegnalazioneCampoValoreInput[] {
-    return this.teamFields
-      .filter(field => field.type !== 'ATTACHMENTS')
+  private editableValues(): SegnalazioneCampoValoreInput[] {
+    const editableScopes = new Set(this.editableFieldScopes());
+    return this.projectFields
+      .filter(field => editableScopes.has(field.scope) && field.type !== 'ATTACHMENTS')
       .flatMap(field => {
-        const rawValue = this.teamFormModel.values[field.id];
+        const rawValue = this.fieldsFormModel.values[field.id];
         const values = Array.isArray(rawValue) ? rawValue : [rawValue];
         return values
           .map(value => (value ?? '').trim())

@@ -358,6 +358,10 @@ export class CampiSegnalazioneComponent implements OnInit {
     return this.typeOptions.find(option => option.value === type)?.label ?? type;
   }
 
+  get lockedStructure(): boolean {
+    return this.selectedField?.hasValues === true;
+  }
+
   scopeLabel(scope: FieldScope): string {
     return this.scopeOptions.find(option => option.value === scope)?.label ?? scope;
   }

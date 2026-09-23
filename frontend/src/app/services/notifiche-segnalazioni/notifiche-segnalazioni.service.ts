@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { AuthService } from '../auth/auth.service';
 import type {
   RiepilogoNotificheSegnalazioni,
@@ -14,6 +14,19 @@ export class NotificheSegnalazioniService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly summary = signal<RiepilogoNotificheSegnalazioni | null>(null);
+  /**
+   * Per-section counts exposed as computed signals so templates that bind
+   * them (e.g. the badges in {@code MainLayoutComponent}) re-render when
+   * {@link #summary} changes. Calling {@code count('PLANNING')} from a
+   * template is fine too, but the computed form makes the dependency
+   * explicit and lets Angular's signal graph re-evaluate the view
+   * automatically.
+   */
+  readonly planningCount = computed(() => this.summary()?.planning ?? 0);
+  readonly anomaliesCount = computed(() => this.summary()?.anomalies ?? 0);
+  readonly improvementsCount = computed(() => this.summary()?.improvements ?? 0);
+  readonly implementationsCount = computed(() => this.summary()?.implementations ?? 0);
+  readonly totalCount = computed(() => this.summary()?.total ?? 0);
   private requestSequence = 0;
 
   refresh(projectId: number): void {

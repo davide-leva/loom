@@ -25,17 +25,17 @@
       }
       @if (auth.user()?.role === 'ADMIN') {
         <a routerLink="/pianificazione" routerLinkActive="active"><i class="pi pi-calendar" aria-hidden="true"></i>Pianificazione
-          @if (notifications.count('PLANNING'); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
+          @if (notifications.planningCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
         </a>
       }
       <a routerLink="/anomalie" routerLinkActive="active"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i>Anomalie
-        @if (notifications.count('ANOMALY'); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
+        @if (notifications.anomaliesCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
       </a>
       <a routerLink="/migliorie" routerLinkActive="active"><i class="pi pi-lightbulb" aria-hidden="true"></i>Migliorie
-        @if (notifications.count('IMPROVEMENT'); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
+        @if (notifications.improvementsCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
       </a>
       <a routerLink="/implementazioni" routerLinkActive="active"><i class="pi pi-code" aria-hidden="true"></i>Implementazioni
-        @if (notifications.count('IMPLEMENTATION'); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
+        @if (notifications.implementationsCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
       </a>
       @if (auth.user()?.role === 'ADMIN') {
         <a routerLink="/configurazione" routerLinkActive="active"><i class="pi pi-cog" aria-hidden="true"></i>Configurazione</a>
@@ -43,13 +43,6 @@
     </nav>
 
     <div class="header-actions">
-      @if (projectContext.currentProjectId()) {
-        <span class="live-status" [class.connected]="liveSync.connected()" role="status">
-          <i class="pi" [class.pi-circle-fill]="liveSync.connected()" [class.pi-sync]="!liveSync.connected()" aria-hidden="true"></i>
-          {{ liveSync.connected() ? 'Live' : 'Riconnessione...' }}
-        </span>
-      }
-      <app-version-badge />
       <label class="project-picker">
         <p-select inputId="current-project" [options]="projectContext.projects()"
                   optionLabel="name" optionValue="id" [ngModel]="projectContext.currentProjectId()"
@@ -83,4 +76,19 @@
   <main class="page-content">
     <router-outlet />
   </main>
+
+  <footer class="app-footer" aria-label="Stato applicazione">
+    <a class="app-footer__brand" routerLink="/dashboard" aria-label="Loom">
+      <img [src]="loomLogoUrl" alt="Loom" />
+    </a>
+    <div class="app-footer__status">
+      @if (projectContext.currentProjectId()) {
+        <span class="live-status" [class.connected]="liveSync.connected()" role="status">
+          <i class="pi" [class.pi-circle-fill]="liveSync.connected()" [class.pi-sync]="!liveSync.connected()" aria-hidden="true"></i>
+          {{ liveSync.connected() ? 'Live' : 'Riconnessione...' }}
+        </span>
+      }
+      <app-version-badge />
+    </div>
+  </footer>
 </div>

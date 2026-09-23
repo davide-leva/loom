@@ -197,15 +197,46 @@ describe('SegnalazioneDetailDialogComponent', () => {
       expect(component.canArchive()).toBe(false);
     });
 
-    it('canEditTeamFields(): TEAM or ADMIN', () => {
+    it('canEditAnyField(): TEAM or ADMIN or SUPERUSER', () => {
       userSignal.set(userOf('USER'));
-      expect(component.canEditTeamFields()).toBe(false);
+      expect(component.canEditAnyField()).toBe(false);
 
       userSignal.set(userOf('TEAM'));
-      expect(component.canEditTeamFields()).toBe(true);
+      expect(component.canEditAnyField()).toBe(true);
 
       userSignal.set(userOf('ADMIN'));
-      expect(component.canEditTeamFields()).toBe(true);
+      expect(component.canEditAnyField()).toBe(true);
+
+      userSignal.set(userOf('SUPERUSER'));
+      expect(component.canEditAnyField()).toBe(true);
+    });
+
+    it('visibleFieldScopes() returns scopes by role (TEAM sees SUPERUSER read-only)', () => {
+      userSignal.set(userOf('USER'));
+      expect(component.visibleFieldScopes()).toEqual(['USER']);
+
+      userSignal.set(userOf('TEAM'));
+      expect(component.visibleFieldScopes()).toEqual(['USER', 'TEAM', 'SUPERUSER']);
+
+      userSignal.set(userOf('ADMIN'));
+      expect(component.visibleFieldScopes()).toEqual(['USER', 'TEAM', 'SUPERUSER']);
+
+      userSignal.set(userOf('SUPERUSER'));
+      expect(component.visibleFieldScopes()).toEqual(['USER', 'SUPERUSER']);
+    });
+
+    it('editableFieldScopes() excludes SUPERUSER for TEAM role', () => {
+      userSignal.set(userOf('USER'));
+      expect(component.editableFieldScopes()).toEqual(['USER']);
+
+      userSignal.set(userOf('TEAM'));
+      expect(component.editableFieldScopes()).toEqual(['USER', 'TEAM']);
+
+      userSignal.set(userOf('ADMIN'));
+      expect(component.editableFieldScopes()).toEqual(['USER', 'TEAM', 'SUPERUSER']);
+
+      userSignal.set(userOf('SUPERUSER'));
+      expect(component.editableFieldScopes()).toEqual(['USER', 'SUPERUSER']);
     });
 
     it('canDeleteIssue(): ADMIN always; issuer within 10 min', () => {
@@ -280,6 +311,33 @@ describe('SegnalazioneDetailDialogComponent', () => {
       segnalazioniApi.eliminaSegnalazione$.error(new Error('boom'));
       expect(component.error).toBe('Non riesco a eliminare la segnalazione.');
       expect(component.deleting).toBe(false);
+    });
+  });
+
+  describe('issue field editing', () => {
+    beforeEach(() => {
+      segnalazioniApi.emitDetail(detail());
+      segnalazioniApi.completeDetail();
+    });
+
+    it('saveIssueFields() does nothing when user has no editable scopes', () => {
+      userSignal.set(userOf('USER'));
+      component.fieldsFormModel = { title: '', description: '', values: {}, attachments: {}, internal: false };
+      component.saveIssueFields();
+      expect(segnalazioniApi.updateIssueValues).not.toHaveBeenCalled();
+    });
+
+    it('fieldsValid() requires mandatory editable fields to be non-empty', () => {
+      userSignal.set(userOf('ADMIN'));
+      component.projectFields = [
+        { id: 10, projectId: 1, code: 'SEV', label: 'Severity', description: null,
+          mandatory: true, multiple: false, type: 'TEXT', scope: 'TEAM', hasValues: false }
+      ];
+      component.fieldsFormModel = { title: '', description: '', values: { 10: '' }, attachments: {}, internal: false };
+      expect(component.fieldsValid()).toBe(false);
+
+      component.fieldsFormModel.values[10] = 'HIGH';
+      expect(component.fieldsValid()).toBe(true);
     });
   });
 

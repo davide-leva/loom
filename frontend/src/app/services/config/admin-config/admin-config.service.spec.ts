@@ -60,7 +60,8 @@ describe('AdminConfigService', () => {
     mandatory: false,
     multiple: false,
     type: 'SELECT',
-    scope: 'TEAM'
+    scope: 'TEAM',
+    hasValues: false
   };
 
   const option: SegnalazioneCampoOpzione = {

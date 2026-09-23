@@ -1,12 +1,12 @@
-.segnalazione-form-anteprima { display: flex; flex-direction: column; gap: 22px; }
-.segnalazione-form-sezione { padding: 16px; border: 1px solid #dbe7f3; border-radius: 8px; background: #fbfdff; }
-.segnalazione-form-sezione h3 { margin: 0 0 14px; color: var(--p-primary-700); font-size: 18px; }
-.segnalazione-form-griglia { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.segnalazione-form-campo { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.segnalazione-form-campo label { color: #374151; font-size: 13px; font-weight: 600; }
-.segnalazione-form-campo input, .segnalazione-form-campo textarea { width: 100%; }
-.segnalazione-form-controllo { display: flex; align-items: center; gap: 10px; color: #374151; font-size: 13px; font-weight: 700; }
-.segnalazione-form-campo textarea {
+.segnalazione-form-preview { display: flex; flex-direction: column; gap: 22px; }
+.segnalazione-form-section { padding: 16px; border: 1px solid #dbe7f3; border-radius: 8px; background: #fbfdff; }
+.segnalazione-form-section h3 { margin: 0 0 14px; color: var(--p-primary-700); font-size: 18px; }
+.segnalazione-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.segnalazione-form-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.segnalazione-form-field label { color: #374151; font-size: 13px; font-weight: 600; }
+.segnalazione-form-field input, .segnalazione-form-field textarea { width: 100%; }
+.segnalazione-form-check { display: flex; align-items: center; gap: 10px; color: #374151; font-size: 13px; font-weight: 700; }
+.segnalazione-form-field textarea {
   resize: vertical;
   min-height: 86px;
   border: 1px solid #cbd5e1;
@@ -16,16 +16,17 @@
   background: #f8fafc;
   font: inherit;
 }
-.segnalazione-form-campo textarea:focus {
+.segnalazione-form-field textarea:focus {
   outline: 0;
   border-color: var(--p-primary-600);
   box-shadow: 0 0 0 2px rgba(20, 94, 168, .12);
 }
-.segnalazione-form-campo small { color: #64748b; }
+.segnalazione-form-field small { color: #64748b; }
+.readonly-hint { color: #94a3b8; font-weight: 500; font-size: 11px; margin-left: 4px; }
 .span-2 { grid-column: 1 / -1; }
 .empty-details { color: #64748b; margin: 0; }
-:host ::ng-deep .segnalazione-form-campo .p-select { width: 100%; }
-:host ::ng-deep .segnalazione-form-campo .p-multiselect { width: 100%; }
+:host ::ng-deep .segnalazione-form-field .p-select { width: 100%; }
+:host ::ng-deep .segnalazione-form-field .p-multiselect { width: 100%; }
 @media (max-width: 720px) {
-  .segnalazione-form-griglia { grid-template-columns: 1fr; }
+  .segnalazione-form-grid { grid-template-columns: 1fr; }
 }

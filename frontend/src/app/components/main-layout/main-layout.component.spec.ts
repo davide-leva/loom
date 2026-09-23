@@ -23,7 +23,10 @@ describe('MainLayoutComponent', () => {
   let projectContext: { load: jest.Mock; clear: jest.Mock; currentProjectId: () => number | null;
                         projects: () => ProjectSummary[]; loadError: () => boolean };
   let liveSync: { watch: jest.Mock; revision: () => number; connected: () => boolean };
-  let notifications: { refresh: jest.Mock; clear: jest.Mock; count: jest.Mock; isUnread: jest.Mock };
+  let notifications: { refresh: jest.Mock; clear: jest.Mock; count: jest.Mock; isUnread: jest.Mock;
+                        planningCount: () => number; anomaliesCount: () => number;
+                        improvementsCount: () => number; implementationsCount: () => number;
+                        totalCount: () => number };
   let versionInfoSignal: ReturnType<typeof signal<unknown>>;
   let version: { load: jest.Mock; info: typeof versionInfoSignal };
 
@@ -49,7 +52,11 @@ describe('MainLayoutComponent', () => {
       revision: () => revisionSignal(),
       connected: () => connectedSignal()
     };
-    notifications = { refresh: jest.fn(), clear: jest.fn(), count: jest.fn(() => 0), isUnread: jest.fn(() => false) };
+    notifications = { refresh: jest.fn(), clear: jest.fn(), count: jest.fn(() => 0),
+                      isUnread: jest.fn(() => false),
+                      planningCount: () => 0, anomaliesCount: () => 0,
+                      improvementsCount: () => 0, implementationsCount: () => 0,
+                      totalCount: () => 0 };
     versionInfoSignal = signal<unknown>(null);
     version = { load: jest.fn(), info: versionInfoSignal };
 
