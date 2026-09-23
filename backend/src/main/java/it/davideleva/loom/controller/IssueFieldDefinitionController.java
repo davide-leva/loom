@@ -53,12 +53,13 @@ public class IssueFieldDefinitionController {
 
     public record Output(
         Long id, Long projectId, String code, String label, String description,
-        boolean mandatory, boolean multiple, FieldType type, FieldScope scope
+        boolean mandatory, boolean multiple, FieldType type, FieldScope scope, boolean hasValues
     ) {}
 
     @GetMapping
     public List<Output> getAll() {
-        return definitions.findAll().stream().map(IssueFieldDefinitionController::output).toList();
+        return definitions.findAll().stream()
+            .map(this::output).toList();
     }
 
     @GetMapping("/{id}")
@@ -70,7 +71,7 @@ public class IssueFieldDefinitionController {
     public List<Output> getByProject(@PathVariable Long projectId) {
         lookup.project(projectId);
         return definitions.findByProject_Id(projectId).stream()
-            .map(IssueFieldDefinitionController::output).toList();
+            .map(this::output).toList();
     }
 
     @PostMapping
@@ -108,9 +109,10 @@ public class IssueFieldDefinitionController {
         definitions.delete(lookup.definition(id));
     }
 
-    private static Output output(IssueFieldDefinition definition) {
+    private Output output(IssueFieldDefinition definition) {
         return new Output(definition.getId(), definition.getProject().getId(),
             definition.getCode(), definition.getLabel(), definition.getDescription(),
-            definition.isMandatory(), definition.isMultiple(), definition.getType(), definition.getScope());
+            definition.isMandatory(), definition.isMultiple(), definition.getType(), definition.getScope(),
+            values.existsByDefinitionId(definition.getId()));
     }
 }

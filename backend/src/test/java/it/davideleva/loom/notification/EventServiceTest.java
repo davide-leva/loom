@@ -16,6 +16,7 @@ import it.davideleva.loom.domain.Company;
 import it.davideleva.loom.domain.Event;
 import it.davideleva.loom.domain.EventType;
 import it.davideleva.loom.domain.EventUserNotification;
+import it.davideleva.loom.domain.FieldScope;
 import it.davideleva.loom.domain.Issue;
 import it.davideleva.loom.domain.IssueType;
 import it.davideleva.loom.domain.Project;
@@ -32,6 +33,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -265,6 +267,79 @@ class EventServiceTest {
 
         // before afterCommit runs, the live update must not have fired.
         verify(liveUpdates, times(0)).changed(any(), any(), eq(false));
+    }
+
+    @Test
+    void issueEventWithTeamScopeExcludesUsersWhoCannotSeeTeamFields() {
+        // Scenario: USER recipients (issuer/dev/approver/companyUser1/member) cannot see TEAM scope,
+        // so a TEAM-scoped field change should not notify them. Admin (always visible) still does.
+        Scenario s = scenario(false);
+
+        ArgumentCaptor<EventUserNotification> captor = ArgumentCaptor.forClass(EventUserNotification.class);
+        // Use a USER actor (developer) so that admin is not removed by the actor filter.
+        service.issueEvent(EventType.ISSUE_VALUES_CHANGED, s.issue, s.developer, "Campo team: A → B",
+            Set.of(FieldScope.TEAM));
+
+        verify(notifications, atLeastOnce()).save(captor.capture());
+        List<EventUserNotification> saved = captor.getAllValues();
+        assertTrue(saved.stream().allMatch(n -> n.getUser().getRole() == Role.ADMIN),
+            "only admins should receive notifications for TEAM-scoped field changes");
+        assertTrue(saved.stream().anyMatch(n -> n.getUser().getId().equals(s.admin.getId())),
+            "admin should receive the notification even though it is for a TEAM-scoped field");
+    }
+
+    @Test
+    void issueEventWithSuperuserScopeExcludesRegularUsersButReachesSuperuser() {
+        // Scenarist: approver is SUPERUSER (USER-scoped visibility only for regular USER).
+        // Modify a SUPERUSER-scoped field; approver must still get a notification.
+        Scenario s = scenario(false);
+
+        ArgumentCaptor<EventUserNotification> captor = ArgumentCaptor.forClass(EventUserNotification.class);
+        service.issueEvent(EventType.ISSUE_VALUES_CHANGED, s.issue, s.admin, "Campo superuser: X → Y",
+            Set.of(FieldScope.SUPERUSER));
+
+        verify(notifications, atLeastOnce()).save(captor.capture());
+        List<EventUserNotification> saved = captor.getAllValues();
+        assertTrue(saved.stream().anyMatch(n -> n.getUser().getId().equals(s.approver.getId())),
+            "superuser approver should receive notifications for SUPERUSER-scoped field changes");
+        assertTrue(saved.stream().noneMatch(n -> n.getUser().getRole() == Role.USER),
+            "USER recipients should not be notified about SUPERUSER-scoped changes");
+    }
+
+    @Test
+    void issueEventWithMixedScopesNotifiesAllRolesWithAnyOverlappingVisibility() {
+        // USER-scoped change — USER recipients must still get USER-scope notifications, and admins
+        // (with broader visibility) must remain reachable regardless.
+        Scenario s = scenario(false);
+
+        ArgumentCaptor<EventUserNotification> captor = ArgumentCaptor.forClass(EventUserNotification.class);
+        // Use a USER actor so admin does not get excluded by the actor filter.
+        service.issueEvent(EventType.ISSUE_VALUES_CHANGED, s.issue, s.developer, "Campo user: a → b",
+            Set.of(FieldScope.USER));
+
+        verify(notifications, atLeastOnce()).save(captor.capture());
+        List<EventUserNotification> saved = captor.getAllValues();
+        assertTrue(saved.stream().anyMatch(n -> n.getUser().getRole() == Role.USER),
+            "USER recipients should receive USER-scoped field notifications");
+        assertTrue(saved.stream().anyMatch(n -> n.getUser().getRole() == Role.ADMIN),
+            "ADMIN recipients should receive USER-scoped field notifications");
+    }
+
+    @Test
+    void issueEventWithoutScopesNotifiesEveryoneAsBefore() {
+        Scenario s = scenario(false);
+
+        ArgumentCaptor<EventUserNotification> captor = ArgumentCaptor.forClass(EventUserNotification.class);
+        // Use a USER-role actor so the admin recipient is not excluded by the actor filter.
+        service.issueEvent(EventType.ISSUE_STATUS_CHANGED, s.issue, s.companyUser1, "status updated");
+
+        verify(notifications, atLeastOnce()).save(captor.capture());
+        // Fallback (no scopes argument) still notifies every recipient regardless of role.
+        List<EventUserNotification> saved = captor.getAllValues();
+        assertTrue(saved.stream().anyMatch(n -> n.getUser().getRole() == Role.USER),
+            "USER recipients should still be notified when no scope filter is given");
+        assertTrue(saved.stream().anyMatch(n -> n.getUser().getRole() == Role.ADMIN),
+            "ADMIN recipients should still be notified when no scope filter is given");
     }
 
     // ---------- helpers ----------
