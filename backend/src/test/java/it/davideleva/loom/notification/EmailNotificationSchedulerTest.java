@@ -23,6 +23,7 @@ import it.davideleva.loom.repository.CompanyRepository;
 import it.davideleva.loom.repository.EventUserNotificationRepository;
 import it.davideleva.loom.repository.UserRepository;
 import jakarta.mail.internet.MimeMessage;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -183,6 +184,125 @@ class EmailNotificationSchedulerTest {
 
         verify(mailSender, times(1)).send(any(MimeMessage.class));
         assertEquals(true, n.isNotified());
+    }
+
+    @Test
+    void subjectForSingleProjectUsesSingularLabel() {
+        Issue issue = new Issue(scenarioProject("Customer Portal"), "Bug", "Desc", IssueType.ANOMALY);
+        ReflectionTestUtils.setField(issue, "id", 1L);
+        var digest = new EmailDigest(
+            new EmailDigest.UserDigest(1L, "alice", "a@example.com", "Alice"),
+            Instant.now(), Instant.now(),
+            List.of(new EmailDigest.IssueDigest(1L, 10L, "Customer Portal", "Bug", false,
+                "Anomalia", "Segnalato", null, List.of())));
+        assertEquals("Aggiornamenti per il progetto Customer Portal",
+            EmailNotificationScheduler.subjectFor(digest));
+    }
+
+    @Test
+    void subjectForTwoProjectsListsBothAndUsesPluralLabel() {
+        var digest = new EmailDigest(
+            new EmailDigest.UserDigest(1L, "alice", "a@example.com", "Alice"),
+            Instant.now(), Instant.now(),
+            List.of(
+                new EmailDigest.IssueDigest(1L, 1L, "Customer Portal", "Bug A", false,
+                    null, null, null, List.of()),
+                new EmailDigest.IssueDigest(2L, 2L, "Admin Console", "Bug B", false,
+                    null, null, null, List.of())));
+        assertEquals("Aggiornamenti per i progetti Customer Portal e Admin Console",
+            EmailNotificationScheduler.subjectFor(digest));
+    }
+
+    @Test
+    void subjectForMoreThanTwoProjectsCollapsesExtras() {
+        var digest = new EmailDigest(
+            new EmailDigest.UserDigest(1L, "alice", "a@example.com", "Alice"),
+            Instant.now(), Instant.now(),
+            List.of(
+                new EmailDigest.IssueDigest(1L, 1L, "Alpha", "a", false, null, null, null, List.of()),
+                new EmailDigest.IssueDigest(2L, 2L, "Beta", "b", false, null, null, null, List.of()),
+                new EmailDigest.IssueDigest(3L, 3L, "Gamma", "c", false, null, null, null, List.of()),
+                new EmailDigest.IssueDigest(4L, 4L, "Delta", "d", false, null, null, null, List.of())));
+        assertEquals("Aggiornamenti per i progetti Alpha, Beta (+2)",
+            EmailNotificationScheduler.subjectFor(digest));
+    }
+
+    @Test
+    void formatTimestampProducesItalianDateWithoutEventTypePrefix() {
+        String formatted = EmailNotificationScheduler.formatTimestamp(Instant.parse("2026-09-23T14:30:00Z"));
+        // We only assert that the legacy 'ISSUE_CREATED' prefix is gone and the day survives;
+        // the exact hour depends on the JVM default timezone.
+        assertEquals(false, formatted.contains("ISSUE_CREATED"));
+        assertTrue(formatted.contains("23"));
+        assertTrue(formatted.contains("2026"));
+    }
+
+    @Test
+    void windowDescriptionCollapsesToTimeOnlyWhenSameDay() {
+        Instant t1 = Instant.parse("2026-03-01T07:00:00Z");
+        Instant t2 = Instant.parse("2026-03-01T15:00:00Z");
+        var digest = new EmailDigest(
+            new EmailDigest.UserDigest(1L, "alice", "a@example.com", "Alice"),
+            t1, t2, List.of());
+        String text = EmailNotificationScheduler.windowDescription(digest);
+        assertTrue(text.contains("oggi"), "same-day window must use the word 'oggi'");
+        assertTrue(text.contains(":"));
+    }
+
+    @Test
+    void windowDescriptionUsesDatesAcrossMultipleDays() {
+        Instant t1 = Instant.parse("2026-03-01T07:00:00Z");
+        Instant t2 = Instant.parse("2026-03-04T15:00:00Z");
+        var digest = new EmailDigest(
+            new EmailDigest.UserDigest(1L, "alice", "a@example.com", "Alice"),
+            t1, t2, List.of());
+        String text = EmailNotificationScheduler.windowDescription(digest);
+        assertTrue(text.contains("dal "), "multi-day window must show 'dal'");
+        assertTrue(text.contains(" al "));
+    }
+
+    @Test
+    void htmlBodyRendersInlineLoomLogoWhenResourceAvailable() throws Exception {
+        var digest = new EmailDigest(
+            new EmailDigest.UserDigest(1L, "alice", "a@example.com", "Alice"),
+            Instant.parse("2026-03-01T09:00:00Z"), Instant.parse("2026-03-01T15:00:00Z"),
+            List.of());
+        String body = invokeHtmlBody(digest, "Loom", false, true);
+
+        assertTrue(body.contains("cid:loom-logo"),
+            "body must reference the inline Loom logo when the resource is present");
+        assertTrue(body.contains("Loom") && body.contains("margin:28px auto 0"),
+            "loom footer must be centered under the card");
+    }
+
+    @Test
+    void htmlBodyFallsBackToTextLoomWordmarkWhenLogoMissing() throws Exception {
+        var digest = new EmailDigest(
+            new EmailDigest.UserDigest(1L, "alice", "a@example.com", "Alice"),
+            Instant.parse("2026-03-01T09:00:00Z"), Instant.parse("2026-03-01T15:00:00Z"),
+            List.of());
+        String body = invokeHtmlBody(digest, "Loom", false, false);
+
+        assertEquals(false, body.contains("cid:loom-logo"),
+            "body must not reference the inline logo when the resource is missing");
+        assertTrue(body.contains(">Loom<"),
+            "body must still show the Loom wordmark as fallback text");
+    }
+
+    private static String invokeHtmlBody(EmailDigest digest, String brandName,
+                                        boolean hasLogo, boolean hasLoomLogo)
+        throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Method method = EmailNotificationScheduler.class.getDeclaredMethod(
+            "htmlBody", EmailDigest.class, String.class, boolean.class, boolean.class);
+        method.setAccessible(true);
+        return (String) method.invoke(null, digest, brandName, hasLogo, hasLoomLogo);
+    }
+
+    private Project scenarioProject(String name) {
+        Company company = new Company(name);
+        Project project = new Project(name, company);
+        ReflectionTestUtils.setField(project, "id", (long) name.hashCode());
+        return project;
     }
 
     // ---------- helpers ----------

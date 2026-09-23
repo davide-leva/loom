@@ -138,7 +138,7 @@ public class WorkspaceIssueController {
 
     public record FieldOutput(
         Long id, Long projectId, String code, String label, String description,
-        boolean mandatory, boolean multiple, FieldType type, FieldScope scope
+        boolean mandatory, boolean multiple, FieldType type, FieldScope scope, boolean hasValues
     ) {}
 
     public record FieldOptionOutput(Long id, Long definitionId, Long projectId, String value, String label, boolean active) {}
@@ -309,7 +309,7 @@ public class WorkspaceIssueController {
         requireVisibleProject(project, user);
         return definitions.findByProject_Id(projectId).stream()
             .filter(definition -> canUseField(definition, user))
-            .map(WorkspaceIssueController::fieldOutput)
+            .map(definition -> fieldOutput(definition, values.existsByDefinitionId(definition.getId())))
             .toList();
     }
 
@@ -350,31 +350,34 @@ public class WorkspaceIssueController {
     }
 
     @PatchMapping("/issues/{issueId}/values")
-    public IssueDetail updateTeamValues(@PathVariable Long issueId, @Valid @RequestBody ValuesPatch input,
-                                        JwtAuthenticationToken authentication) {
+    public IssueDetail updateIssueValues(@PathVariable Long issueId, @Valid @RequestBody ValuesPatch input,
+                                         JwtAuthenticationToken authentication) {
         User user = currentUser(authentication);
-        if (!isInternalUser(user)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "TEAM or ADMIN role required");
-        }
         Issue issue = lookup.issue(issueId);
         requireVisibleProject(issue.getProject(), user);
         requireVisibleIssue(issue, user);
-        List<IssueFieldDefinition> teamFields = definitions.findByProject_Id(issue.getProject().getId()).stream()
-            .filter(definition -> definition.getScope() == FieldScope.TEAM)
+        Set<FieldScope> writableScopes = writableScopesFor(user);
+        List<IssueFieldDefinition> writableFields = definitions.findByProject_Id(issue.getProject().getId()).stream()
+            .filter(definition -> writableScopes.contains(definition.getScope()))
             .toList();
-        List<Long> teamFieldIds = teamFields.stream().map(IssueFieldDefinition::getId).toList();
+        List<Long> writableFieldIds = writableFields.stream().map(IssueFieldDefinition::getId).toList();
         List<IssueData> previousValues = values.findByIssueId(issueId).stream()
-            .filter(value -> teamFieldIds.contains(value.getDefinitionId())).toList();
+            .filter(value -> writableFieldIds.contains(value.getDefinitionId())).toList();
         List<IssueData> updatedValues = validatedValues(issue,
-            input.values() == null ? List.of() : input.values(), Set.of(FieldScope.TEAM));
-        String changes = fieldChanges(teamFields, previousValues, updatedValues);
-        if (!teamFieldIds.isEmpty()) {
-            values.deleteByIssueIdAndDefinitionIdIn(issue.getId(), teamFieldIds);
+            input.values() == null ? List.of() : input.values(), writableScopes);
+        List<IssueFieldDefinition> changedFields = changedFields(writableFields, previousValues, updatedValues);
+        String changes = renderFieldChanges(changedFields, previousValues, updatedValues);
+        Set<FieldScope> modifiedScopes = changedFields.stream()
+            .map(IssueFieldDefinition::getScope)
+            .collect(Collectors.toSet());
+        if (!writableFieldIds.isEmpty()) {
+            values.deleteByIssueIdAndDefinitionIdIn(issue.getId(), writableFieldIds);
         }
         values.saveAll(updatedValues);
         if (!changes.isBlank()) {
-            eventService.issueEvent(EventType.ISSUE_VALUES_CHANGED, issue, user, changes);
-            log.info("Issue values changed: project={} issue={} actor={}", issue.getProject().getId(), issue.getId(), user.getId());
+            eventService.issueEvent(EventType.ISSUE_VALUES_CHANGED, issue, user, changes, modifiedScopes);
+            log.info("Issue values changed: project={} issue={} actor={} scopes={}",
+                issue.getProject().getId(), issue.getId(), user.getId(), modifiedScopes);
         }
         return issueDetail(issueId, authentication);
     }
@@ -736,7 +739,8 @@ public class WorkspaceIssueController {
         }
         if (previousStatus != input.status()) {
             eventService.issueEvent(EventType.ISSUE_STATUS_CHANGED, issue, actor,
-                "Stato: " + statusLabel(previousStatus) + " → " + statusLabel(input.status()));
+                "Stato: " + statusLabel(previousStatus) + " → " + statusLabel(input.status())
+                + "\n" + previousStatus + " -> " + input.status());
             log.info("Issue status changed: project={} issue={} actor={} from={} to={}",
                 issue.getProject().getId(), issue.getId(), actor.getId(), previousStatus, input.status());
         }
@@ -755,15 +759,19 @@ public class WorkspaceIssueController {
             .collect(Collectors.joining("\n"));
     }
 
-    private static String fieldChanges(List<IssueFieldDefinition> fields, List<IssueData> before, List<IssueData> after) {
+    private static List<IssueFieldDefinition> changedFields(List<IssueFieldDefinition> fields,
+                                                             List<IssueData> before, List<IssueData> after) {
         return fields.stream()
-            .map(field -> {
-                List<String> oldValues = fieldValues(before, field.getId());
-                List<String> newValues = fieldValues(after, field.getId());
-                if (oldValues.equals(newValues)) return "";
-                return field.getLabel() + ": " + displayValues(oldValues) + " → " + displayValues(newValues);
-            })
-            .filter(change -> !change.isBlank())
+            .filter(field -> !fieldValues(before, field.getId()).equals(fieldValues(after, field.getId())))
+            .toList();
+    }
+
+    private static String renderFieldChanges(List<IssueFieldDefinition> changedFields,
+                                             List<IssueData> before, List<IssueData> after) {
+        return changedFields.stream()
+            .map(field -> field.getLabel() + ": "
+                + displayValues(fieldValues(before, field.getId())) + " → "
+                + displayValues(fieldValues(after, field.getId())))
             .collect(Collectors.joining("\n"));
     }
 
@@ -1018,10 +1026,10 @@ public class WorkspaceIssueController {
         return new UserOutput(user.getId(), user.getUsername(), user.getFirstName(), user.getLastName(), user.getRole());
     }
 
-    private static FieldOutput fieldOutput(IssueFieldDefinition definition) {
+    private static FieldOutput fieldOutput(IssueFieldDefinition definition, boolean hasValues) {
         return new FieldOutput(definition.getId(), definition.getProject().getId(), definition.getCode(),
             definition.getLabel(), definition.getDescription(),
-            definition.isMandatory(), definition.isMultiple(), definition.getType(), definition.getScope());
+            definition.isMandatory(), definition.isMultiple(), definition.getType(), definition.getScope(), hasValues);
     }
 
     private static FieldOptionOutput fieldOptionOutput(it.davideleva.loom.domain.IssueFieldOption option) {
