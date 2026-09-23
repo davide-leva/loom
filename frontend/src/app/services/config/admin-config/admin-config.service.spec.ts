@@ -9,10 +9,10 @@ import type {
   Company,
   CompanyUser,
   CompanyUserInput,
-  IssueField,
-  IssueFieldInput,
-  IssueFieldOption,
-  IssueFieldOptionInput,
+  SegnalazioneCampo,
+  SegnalazioneCampoInput,
+  SegnalazioneCampoOpzione,
+  SegnalazioneCampoOpzioneInput,
   Project,
   ProjectInput,
   TeamUser,
@@ -51,7 +51,7 @@ describe('AdminConfigService', () => {
     wantEmail: true
   };
 
-  const field: IssueField = {
+  const field: SegnalazioneCampo = {
     id: 100,
     projectId: 7,
     code: 'SEVERITY',
@@ -63,7 +63,7 @@ describe('AdminConfigService', () => {
     scope: 'TEAM'
   };
 
-  const option: IssueFieldOption = {
+  const option: SegnalazioneCampoOpzione = {
     id: 200,
     definitionId: 100,
     projectId: 7,
@@ -299,10 +299,10 @@ describe('AdminConfigService', () => {
     });
   });
 
-  describe('issue fields', () => {
+  describe('segnalazione fields', () => {
     it('issueFields() GETs the fields for the project', () => {
-      let resolved: IssueField[] | undefined;
-      service.issueFields(7).subscribe(value => { resolved = value; });
+      let resolved: SegnalazioneCampo[] | undefined;
+      service.segnalazioneCampi(7).subscribe(value => { resolved = value; });
       const req = http.expectOne('/api/issue-fields/project/7');
       expect(req.request.method).toBe('GET');
       expect(req.request.headers.get('Authorization')).toBe('Bearer test');
@@ -310,8 +310,8 @@ describe('AdminConfigService', () => {
       expect(resolved).toEqual([field]);
     });
 
-    it('createIssueField() POSTs the input payload', () => {
-      const input: IssueFieldInput & { projectId: number } = {
+    it('creaSegnalazioneCampo() POSTs the input payload', () => {
+      const input: SegnalazioneCampoInput & { projectId: number } = {
         projectId: 7,
         code: 'SEVERITY',
         label: 'Severity',
@@ -321,8 +321,8 @@ describe('AdminConfigService', () => {
         type: 'SELECT',
         scope: 'TEAM'
       };
-      let resolved: IssueField | undefined;
-      service.createIssueField(input).subscribe(value => { resolved = value; });
+      let resolved: SegnalazioneCampo | undefined;
+      service.creaSegnalazioneCampo(input).subscribe(value => { resolved = value; });
       const req = http.expectOne('/api/issue-fields');
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(input);
@@ -331,8 +331,8 @@ describe('AdminConfigService', () => {
       expect(resolved).toEqual(field);
     });
 
-    it('updateIssueField() PUTs the input payload', () => {
-      const input: IssueFieldInput = {
+    it('aggiornaSegnalazioneCampo() PUTs the input payload', () => {
+      const input: SegnalazioneCampoInput = {
         code: 'SEVERITY',
         label: 'Severity',
         description: null,
@@ -341,8 +341,8 @@ describe('AdminConfigService', () => {
         type: 'SELECT',
         scope: 'TEAM'
       };
-      let resolved: IssueField | undefined;
-      service.updateIssueField(100, input).subscribe(value => { resolved = value; });
+      let resolved: SegnalazioneCampo | undefined;
+      service.aggiornaSegnalazioneCampo(100, input).subscribe(value => { resolved = value; });
       const req = http.expectOne('/api/issue-fields/100');
       expect(req.request.method).toBe('PUT');
       expect(req.request.body).toEqual(input);
@@ -351,9 +351,9 @@ describe('AdminConfigService', () => {
       expect(resolved).toEqual(field);
     });
 
-    it('deleteIssueField() DELETEs the field', () => {
+    it('eliminaSegnalazioneCampo() DELETEs the field', () => {
       let resolved: void | undefined;
-      service.deleteIssueField(100).subscribe(value => { resolved = value; });
+      service.eliminaSegnalazioneCampo(100).subscribe(value => { resolved = value; });
       const req = http.expectOne('/api/issue-fields/100');
       expect(req.request.method).toBe('DELETE');
       expect(req.request.headers.get('Authorization')).toBe('Bearer test');
@@ -362,10 +362,10 @@ describe('AdminConfigService', () => {
     });
   });
 
-  describe('issue field options', () => {
+  describe('segnalazione field options', () => {
     it('issueFieldOptions() GETs the options for the definition', () => {
-      let resolved: IssueFieldOption[] | undefined;
-      service.issueFieldOptions(100).subscribe(value => { resolved = value; });
+      let resolved: SegnalazioneCampoOpzione[] | undefined;
+      service.segnalazioneCampoOpzioni(100).subscribe(value => { resolved = value; });
       const req = http.expectOne('/api/issue-field-options/field/100');
       expect(req.request.method).toBe('GET');
       expect(req.request.headers.get('Authorization')).toBe('Bearer test');
@@ -373,15 +373,15 @@ describe('AdminConfigService', () => {
       expect(resolved).toEqual([option]);
     });
 
-    it('createIssueFieldOption() POSTs the option payload', () => {
-      const input: IssueFieldOptionInput & { definitionId: number } = {
+    it('creaSegnalazioneCampoOpzione() POSTs the option payload', () => {
+      const input: SegnalazioneCampoOpzioneInput & { definitionId: number } = {
         definitionId: 100,
         value: 'LOW',
         label: 'Low',
         active: true
       };
-      let resolved: IssueFieldOption | undefined;
-      service.createIssueFieldOption(input).subscribe(value => { resolved = value; });
+      let resolved: SegnalazioneCampoOpzione | undefined;
+      service.creaSegnalazioneCampoOpzione(input).subscribe(value => { resolved = value; });
       const req = http.expectOne('/api/issue-field-options');
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(input);
@@ -390,10 +390,10 @@ describe('AdminConfigService', () => {
       expect(resolved).toEqual(option);
     });
 
-    it('updateIssueFieldOption() PUTs the option payload', () => {
+    it('aggiornaSegnalazioneCampoOpzione() PUTs the option payload', () => {
       const input = { value: 'LOW', label: 'Low', active: true };
-      let resolved: IssueFieldOption | undefined;
-      service.updateIssueFieldOption(200, input).subscribe(value => { resolved = value; });
+      let resolved: SegnalazioneCampoOpzione | undefined;
+      service.aggiornaSegnalazioneCampoOpzione(200, input).subscribe(value => { resolved = value; });
       const req = http.expectOne('/api/issue-field-options/200');
       expect(req.request.method).toBe('PUT');
       expect(req.request.body).toEqual(input);
@@ -402,9 +402,9 @@ describe('AdminConfigService', () => {
       expect(resolved).toEqual(option);
     });
 
-    it('deleteIssueFieldOption() DELETEs the option', () => {
+    it('eliminaSegnalazioneCampoOpzione() DELETEs the option', () => {
       let resolved: void | undefined;
-      service.deleteIssueFieldOption(200).subscribe(value => { resolved = value; });
+      service.eliminaSegnalazioneCampoOpzione(200).subscribe(value => { resolved = value; });
       const req = http.expectOne('/api/issue-field-options/200');
       expect(req.request.method).toBe('DELETE');
       expect(req.request.headers.get('Authorization')).toBe('Bearer test');

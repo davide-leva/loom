@@ -166,7 +166,7 @@
           [closable]="!deleting" [closeOnEscape]="!deleting">
   @if (projectToDelete) {
     <p>Vuoi eliminare il progetto <strong>{{ projectToDelete.name }}</strong>?</p>
-    <p>Verranno eliminate anche tutte le issue e i dati collegati al progetto.</p>
+    <p>Verranno eliminate anche tutte le segnalazioni e i dati collegati al progetto.</p>
     @if (deleteError) { <p class="form-error" role="alert">{{ deleteError }}</p> }
     <div class="dialog-actions">
       <p-button label="Annulla" severity="secondary" [outlined]="true" [disabled]="deleting"

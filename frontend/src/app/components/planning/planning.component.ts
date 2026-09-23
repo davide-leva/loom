@@ -6,16 +6,16 @@ import { CardModule } from 'primeng/card';
 import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { forkJoin } from 'rxjs';
-import { IssueDetailDialogComponent } from '../issue-detail-dialog/issue-detail-dialog.component';
-import { IssuesService, TYPE_LABELS } from '../../services/issues/issues.service';
-import type { IssueSummary, IssueType, ProjectUserSummary } from '../../services/issues/issues.service';
+import { SegnalazioneDetailDialogComponent } from '../segnalazione-detail-dialog/segnalazione-detail-dialog.component';
+import { SegnalazioniService, TYPE_LABELS } from '../../services/segnalazioni/segnalazioni.service';
+import type { SegnalazioneSummary, TipoSegnalazione, ProjectUserSummary } from '../../services/segnalazioni/segnalazioni.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
-import { IssueNotificationsService } from '../../services/issue-notifications/issue-notifications.service';
+import { NotificheSegnalazioniService } from '../../services/notifiche-segnalazioni/notifiche-segnalazioni.service';
 
 interface PlanningColumn {
   title: string;
-  type: IssueType | null;
+  type: TipoSegnalazione | null;
   empty: string;
 }
 
@@ -23,7 +23,7 @@ interface SelectOption<T> { label: string; value: T; }
 
 @Component({
   selector: 'app-planning',
-  imports: [ButtonModule, CardModule, DatePipe, FormsModule, IssueDetailDialogComponent, SelectModule, TagModule],
+  imports: [ButtonModule, CardModule, DatePipe, FormsModule, SegnalazioneDetailDialogComponent, SelectModule, TagModule],
   template: `
     <p-card styleClass="planning-card">
       <div class="page-title">
@@ -51,23 +51,23 @@ interface SelectOption<T> { label: string; value: T; }
               </header>
 
               <div class="cards">
-                @for (issue of issuesFor(column); track issue.id) {
-                  <div class="planning-card-item" draggable="true" [class.internal-issue]="issue.internal"
-                       [class.saving]="savingIssueId() === issue.id"
-                       (dragstart)="startDrag(issue)" (click)="openDetail(issue)">
+                @for (segnalazione of issuesFor(column); track segnalazione.id) {
+                  <div class="planning-card-item" draggable="true" [class.segnalazione-interna]="segnalazione.internal"
+                       [class.saving]="savingIssueId() === segnalazione.id"
+                       (dragstart)="startDrag(segnalazione)" (click)="openDetail(segnalazione)">
                     <div class="card-main">
-                      <strong>#{{ issue.id }}
-                        @if (notifications.isUnread(issue.id)) {
-                          <span class="issue-unread-dot" title="Nuova o aggiornata" aria-label="Issue nuova o aggiornata"></span>
+                      <strong>#{{ segnalazione.id }}
+                        @if (notifications.isUnread(segnalazione.id)) {
+                          <span class="pallino-non-letto-segnalazione" title="Nuova o aggiornata" aria-label="Segnalazione nuova o aggiornata"></span>
                         }
                       </strong>
-                      <span>{{ issue.createdAt | date:'dd/MM/yyyy' }}</span>
+                      <span>{{ segnalazione.createdAt | date:'dd/MM/yyyy' }}</span>
                     </div>
-                    <h2>{{ issue.title }}</h2>
+                    <h2>{{ segnalazione.title }}</h2>
                     <label class="developer-select" (click)="$event.stopPropagation()" (mousedown)="$event.stopPropagation()">
                       <span>Sviluppatore</span>
-                      <p-select [options]="developerOptions" [ngModel]="issue.devUserId"
-                                (ngModelChange)="setDeveloper(issue, $event)" optionLabel="label" optionValue="value"
+                      <p-select [options]="developerOptions" [ngModel]="segnalazione.devUserId"
+                                (ngModelChange)="setDeveloper(segnalazione, $event)" optionLabel="label" optionValue="value"
                                 placeholder="Non assegnato" appendTo="body" />
                     </label>
                   </div>
@@ -79,9 +79,9 @@ interface SelectOption<T> { label: string; value: T; }
           }
         </section>
       }
-      @if (selectedIssueId !== null) {
-        <app-issue-detail-dialog [issueId]="selectedIssueId" (issueChanged)="onIssueChanged($event)" (issueDeleted)="onIssueDeleted($event)"
-                                 (closed)="selectedIssueId = null" />
+      @if (segnalazioneSelezionataId !== null) {
+        <app-segnalazione-detail-dialog [issueId]="segnalazioneSelezionataId" (issueChanged)="onSegnalazioneModificata($event)" (issueDeleted)="onSegnalazioneEliminata($event)"
+                                 (closed)="segnalazioneSelezionataId = null" />
       }
     </p-card>
   `,
@@ -90,15 +90,15 @@ interface SelectOption<T> { label: string; value: T; }
 export class PlanningComponent {
   private readonly eventSync = inject(LiveSyncService);
   readonly projects = inject(ProjectContextService);
-  private readonly issuesApi = inject(IssuesService);
-  readonly notifications = inject(IssueNotificationsService);
+  private readonly segnalazioniApi = inject(SegnalazioniService);
+  readonly notifications = inject(NotificheSegnalazioniService);
 
-  readonly issues = signal<IssueSummary[]>([]);
+  readonly segnalazioni = signal<SegnalazioneSummary[]>([]);
   readonly users = signal<ProjectUserSummary[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly savingIssueId = signal<number | null>(null);
-  selectedIssueId: number | null = null;
+  segnalazioneSelezionataId: number | null = null;
 
   readonly columns: PlanningColumn[] = [
     { title: 'Da categorizzare', type: null, empty: 'Nessuna segnalazione da categorizzare.' },
@@ -108,7 +108,7 @@ export class PlanningComponent {
   ];
   developerOptions: SelectOption<number | null>[] = [{ label: 'Non assegnato', value: null }];
 
-  private draggedIssue: IssueSummary | null = null;
+  private draggedSegnalazione: SegnalazioneSummary | null = null;
   private lastProjectId: number | null = null;
   private lastRevision = -1;
   private loadSequence = 0;
@@ -123,7 +123,7 @@ export class PlanningComponent {
       this.lastRevision = revision;
       if (projectChanged) {
         this.loadSequence++;
-        this.issues.set([]);
+        this.segnalazioni.set([]);
         this.users.set([]);
         this.error.set(null);
       }
@@ -137,10 +137,10 @@ export class PlanningComponent {
     const sequence = ++this.loadSequence;
     this.loading.set(true);
     this.error.set(null);
-    forkJoin({ issues: this.issuesApi.issues(projectId), users: this.issuesApi.projectUsers(projectId) }).subscribe({
-      next: ({ issues, users }) => {
+    forkJoin({ segnalazioni: this.segnalazioniApi.segnalazioni(projectId), users: this.segnalazioniApi.projectUsers(projectId) }).subscribe({
+      next: ({ segnalazioni, users }) => {
         if (sequence !== this.loadSequence || projectId !== this.projects.currentProjectId()) return;
-        this.issues.set(issues);
+        this.segnalazioni.set(segnalazioni);
         this.users.set(users);
         this.developerOptions = [
           { label: 'Non assegnato', value: null },
@@ -156,26 +156,28 @@ export class PlanningComponent {
     });
   }
 
-  issuesFor(column: PlanningColumn): IssueSummary[] {
-    return this.issues()
-      .filter(issue => issue.status === 'REPORTED' && issue.issueType === column.type)
+  issuesFor(column: PlanningColumn): SegnalazioneSummary[] {
+    return this.segnalazioni()
+      .filter(segnalazione => segnalazione.status === 'REPORTED' && segnalazione.issueType === column.type)
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }
 
-  openDetail(issue: IssueSummary): void {
-    this.selectedIssueId = issue.id;
+  openDetail(segnalazione: SegnalazioneSummary): void {
+    this.segnalazioneSelezionataId = segnalazione.id;
   }
 
-  onIssueChanged(issue: IssueSummary): void {
-    this.issues.update(items => items.map(item => item.id === issue.id ? issue : item));
+  onSegnalazioneModificata(segnalazione: SegnalazioneSummary): void {
+    this.segnalazioni.update(items => items.map(item =>
+      item.id === segnalazione.id ? segnalazione : item
+    ));
   }
 
-  onIssueDeleted(issueId: number): void {
-    this.issues.update(items => items.filter(item => item.id !== issueId));
+  onSegnalazioneEliminata(segnalazioneId: number): void {
+    this.segnalazioni.update(items => items.filter(item => item.id !== segnalazioneId));
   }
 
-  startDrag(issue: IssueSummary): void {
-    this.draggedIssue = issue;
+  startDrag(segnalazione: SegnalazioneSummary): void {
+    this.draggedSegnalazione = segnalazione;
   }
 
   allowDrop(event: DragEvent): void {
@@ -183,34 +185,34 @@ export class PlanningComponent {
   }
 
   dropOnColumn(column: PlanningColumn): void {
-    const issue = this.draggedIssue;
-    this.draggedIssue = null;
+    const issue = this.draggedSegnalazione;
+    this.draggedSegnalazione = null;
     if (!issue || column.type === null || issue.issueType === column.type || this.savingIssueId() !== null) return;
     this.savePlanning(issue, column.type, issue.devUserId);
   }
 
-  setDeveloper(issue: IssueSummary, devUserId: number | null): void {
+  setDeveloper(issue: SegnalazioneSummary, devUserId: number | null): void {
     if (this.savingIssueId() !== null) return;
     if (issue.issueType === null) {
-      this.issues.update(items => items.map(item => item.id === issue.id ? { ...item, devUserId } : item));
+      this.segnalazioni.update(items => items.map(item => item.id === issue.id ? { ...item, devUserId } : item));
       return;
     }
     this.savePlanning(issue, issue.issueType, devUserId);
   }
 
-  private savePlanning(issue: IssueSummary, issueType: IssueType, devUserId: number | null): void {
+  private savePlanning(issue: SegnalazioneSummary, issueType: TipoSegnalazione, devUserId: number | null): void {
     const previous = { issueType: issue.issueType, devUserId: issue.devUserId, devUsername: issue.devUsername };
     const devUsername = this.users().find(user => user.id === devUserId)?.username ?? null;
     this.savingIssueId.set(issue.id);
     this.error.set(null);
-    this.issues.update(items => items.map(item => item.id === issue.id ? { ...item, issueType, devUserId, devUsername } : item));
-    this.issuesApi.updatePlanning(issue.id, issueType, devUserId).subscribe({
+    this.segnalazioni.update(items => items.map(item => item.id === issue.id ? { ...item, issueType, devUserId, devUsername } : item));
+    this.segnalazioniApi.aggiornaPianificazione(issue.id, issueType, devUserId).subscribe({
       next: updated => {
-        this.issues.update(items => items.map(item => item.id === updated.id ? updated : item));
+        this.segnalazioni.update(items => items.map(item => item.id === updated.id ? updated : item));
         this.savingIssueId.set(null);
       },
       error: () => {
-        this.issues.update(items => items.map(item => item.id === issue.id ? { ...item, ...previous } : item));
+        this.segnalazioni.update(items => items.map(item => item.id === issue.id ? { ...item, ...previous } : item));
         this.error.set('Non riesco a salvare la pianificazione.');
         this.savingIssueId.set(null);
       }

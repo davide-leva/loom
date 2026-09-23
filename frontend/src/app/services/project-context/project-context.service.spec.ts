@@ -77,11 +77,11 @@ describe('ProjectContextService', () => {
     expect(service.projects()).toEqual(projects);
     expect(service.currentProjectId()).toBe(1);
     expect(service.currentProject()).toEqual(projects[0]);
-    expect(document.cookie).toContain('sf2-current-project-42=1');
+    expect(document.cookie).toContain('loom-current-project-42=1');
   });
 
   it('load() picks the saved project from the cookie when it is still valid', () => {
-    document.cookie = 'sf2-current-project-42=2; Path=/';
+    document.cookie = 'loom-current-project-42=2; Path=/';
     service.load();
     const req = http.expectOne('/api/auth/projects');
     req.flush(projects);
@@ -90,7 +90,7 @@ describe('ProjectContextService', () => {
   });
 
   it('load() falls back to the first project when the saved id is unknown', () => {
-    document.cookie = 'sf2-current-project-42=999; Path=/';
+    document.cookie = 'loom-current-project-42=999; Path=/';
     service.load();
     const req = http.expectOne('/api/auth/projects');
     req.flush(projects);
@@ -134,7 +134,7 @@ describe('ProjectContextService', () => {
     service.select(2);
     expect(service.currentProjectId()).toBe(2);
     expect(service.currentProject()).toEqual(projects[1]);
-    expect(document.cookie).toContain('sf2-current-project-42=2');
+    expect(document.cookie).toContain('loom-current-project-42=2');
   });
 
   it('select() ignores ids that are not in the project list', () => {
@@ -153,7 +153,7 @@ describe('ProjectContextService', () => {
 
   it('rememberExternalProject() persists a cookie without changing the active project', () => {
     service.rememberExternalProject(2);
-    expect(document.cookie).toContain('sf2-current-project-42=2');
+    expect(document.cookie).toContain('loom-current-project-42=2');
     expect(service.currentProjectId()).toBeNull();
   });
 
@@ -181,7 +181,7 @@ describe('ProjectContextService', () => {
 
 function clearProjectCookie(): void {
   // Clear the cookies the service may have set under both possible user ids.
-  document.cookie = 'sf2-current-project-42=; Path=/; Max-Age=0';
-  document.cookie = 'sf2-current-project-anonymous=; Path=/; Max-Age=0';
-  document.cookie = 'sf2-current-project-99=; Path=/; Max-Age=0';
+  document.cookie = 'loom-current-project-42=; Path=/; Max-Age=0';
+  document.cookie = 'loom-current-project-anonymous=; Path=/; Max-Age=0';
+  document.cookie = 'loom-current-project-99=; Path=/; Max-Age=0';
 }

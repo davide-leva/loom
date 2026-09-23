@@ -8,7 +8,7 @@ import { SelectModule } from 'primeng/select';
 import { AuthService } from '../../services/auth/auth.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
-import { IssueNotificationsService } from '../../services/issue-notifications/issue-notifications.service';
+import { NotificheSegnalazioniService } from '../../services/notifiche-segnalazioni/notifiche-segnalazioni.service';
 import { VersionService } from '../../services/version/version.service';
 import { LOOM_LOGO_URL } from '../../shared/brand-assets';
 import { VersionBadgeComponent } from '../version-badge/version-badge.component';
@@ -23,7 +23,7 @@ export class MainLayoutComponent implements OnInit {
   readonly auth = inject(AuthService);
   readonly projectContext = inject(ProjectContextService);
   readonly liveSync = inject(LiveSyncService);
-  readonly notifications = inject(IssueNotificationsService);
+  readonly notifications = inject(NotificheSegnalazioniService);
   private readonly version = inject(VersionService);
   private readonly router = inject(Router);
 

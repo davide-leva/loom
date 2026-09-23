@@ -6,24 +6,24 @@ import { signal } from '@angular/core';
 import { HomeComponent } from './home.component';
 import { AuthService } from '../../services/auth/auth.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
-import { IssuesService } from '../../services/issues/issues.service';
+import { SegnalazioniService } from '../../services/segnalazioni/segnalazioni.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
 import type { CurrentUser, ProjectSummary } from '../../shared/models/auth.types';
-import type { IssueField, IssueFieldOption, IssueSummary, ProjectUserSummary } from '../../shared/models/issue.types';
+import type { SegnalazioneCampo, SegnalazioneCampoOpzione, SegnalazioneSummary, ProjectUserSummary } from '../../shared/models/segnalazione.types';
 
-class IssuesStub {
-  issues$ = { subscribe: jest.fn() };
-  issues = jest.fn(() => this.issues$);
+class SegnalazioniStub {
+  segnalazioni$ = { subscribe: jest.fn() };
+  segnalazioni = jest.fn(() => this.segnalazioni$);
   projectUsers$ = { subscribe: jest.fn() };
   projectUsers = jest.fn(() => this.projectUsers$);
-  issueFields$ = { subscribe: jest.fn() };
-  issueFields = jest.fn(() => this.issueFields$);
-  issueFieldOptions$ = { subscribe: jest.fn() };
-  issueFieldOptions = jest.fn(() => this.issueFieldOptions$);
-  archivedIssues$ = { subscribe: jest.fn() };
-  archivedIssues = jest.fn(() => this.archivedIssues$);
-  deletedIssues$ = { subscribe: jest.fn() };
-  deletedIssues = jest.fn(() => this.deletedIssues$);
+  segnalazioneCampi$ = { subscribe: jest.fn() };
+  segnalazioneCampi = jest.fn(() => this.segnalazioneCampi$);
+  segnalazioneCampoOpzioni$ = { subscribe: jest.fn() };
+  segnalazioneCampoOpzioni = jest.fn(() => this.segnalazioneCampoOpzioni$);
+  segnalazioniArchiviate$ = { subscribe: jest.fn() };
+  segnalazioniArchiviate = jest.fn(() => this.segnalazioniArchiviate$);
+  segnalazioniEliminate$ = { subscribe: jest.fn() };
+  segnalazioniEliminate = jest.fn(() => this.segnalazioniEliminate$);
 }
 
 describe('HomeComponent', () => {
@@ -38,17 +38,17 @@ describe('HomeComponent', () => {
   let auth: { user: () => CurrentUser | null };
   let projectContext: { currentProjectId: () => number | null; currentProject: () => ProjectSummary | null;
                         projects: () => ProjectSummary[] };
-  let issuesApi: IssuesStub;
+  let segnalazioniApi: SegnalazioniStub;
   let liveSync: { revision: () => number };
 
   const adminUser: CurrentUser = {
     id: 1, username: 'mario', displayName: 'Mario', email: 'm@e.com',
     role: 'ADMIN', companyName: 'Acme', companyId: 10, primaryColor: 'blue',
-    companyLogoUrl: null, internalCompanyName: 'Tickets', internalLogoUrl: null
+    companyLogoUrl: null, internalCompanyName: 'Loom', internalLogoUrl: null
   };
   const teamUser: CurrentUser = { ...adminUser, role: 'TEAM' };
 
-  function issue(partial: Partial<IssueSummary>): IssueSummary {
+  function segnalazione(partial: Partial<SegnalazioneSummary>): SegnalazioneSummary {
     return {
       id: 1, projectId: 1, title: 'T', description: 'D',
       createdAt: '2026-09-19T08:00:00.000Z',
@@ -60,7 +60,7 @@ describe('HomeComponent', () => {
       internal: false, deletedAt: null, archivedAt: null,
       selectValues: {},
       ...partial
-    } as IssueSummary;
+    } as SegnalazioneSummary;
   }
 
   beforeEach(async () => {
@@ -75,7 +75,7 @@ describe('HomeComponent', () => {
       currentProject: () => projectsSignal()[0] ?? null,
       projects: () => projectsSignal()
     };
-    issuesApi = new IssuesStub();
+    segnalazioniApi = new SegnalazioniStub();
     liveSync = { revision: () => revisionSignal() };
 
     await TestBed.configureTestingModule({
@@ -86,7 +86,7 @@ describe('HomeComponent', () => {
         provideHttpClientTesting(),
         { provide: AuthService, useValue: auth },
         { provide: ProjectContextService, useValue: projectContext },
-        { provide: IssuesService, useValue: issuesApi },
+        { provide: SegnalazioniService, useValue: segnalazioniApi },
         { provide: LiveSyncService, useValue: liveSync }
       ]
     }).compileComponents();
@@ -118,7 +118,7 @@ describe('HomeComponent', () => {
       expect(opts[3]).toEqual({ label: 'anna', value: 8 });
     });
 
-    it('statusLabel() maps IssueStatus to italian', () => {
+    it('statusLabel() maps StatusSegnalazione to italian', () => {
       expect(component.statusLabel('REPORTED')).toBe('Segnalato');
       expect(component.statusLabel('IN_PROGRESS')).toBe('In lavorazione');
       expect(component.statusLabel('COMPLETED')).toBe('Completato');
@@ -159,10 +159,10 @@ describe('HomeComponent', () => {
       expect(component.selectFilterValues).toEqual({});
     });
 
-    it('filteredIssues() applies text, status, type, issuer filters', () => {
-      component.issues.set([
-        issue({ id: 1, title: 'login bug', status: 'REPORTED', issueType: 'ANOMALY', issuerUserId: 7, issuerUsername: 'mario' }),
-        issue({ id: 2, title: 'feature', status: 'COMPLETED', issueType: 'IMPLEMENTATION', issuerUserId: 8, issuerUsername: 'anna' })
+    it('segnalazioniFiltrate() applies text, status, type, issuer filters', () => {
+      component.segnalazioni.set([
+        segnalazione({ id: 1, title: 'login bug', status: 'REPORTED', issueType: 'ANOMALY', issuerUserId: 7, issuerUsername: 'mario' }),
+        segnalazione({ id: 2, title: 'feature', status: 'COMPLETED', issueType: 'IMPLEMENTATION', issuerUserId: 8, issuerUsername: 'anna' })
       ]);
 
       component.textFilter = 'feature';
@@ -170,28 +170,28 @@ describe('HomeComponent', () => {
       component.typeFilter = 'IMPLEMENTATION';
       component.issuerFilter = 8;
 
-      const result = component.filteredIssues();
+      const result = component.segnalazioniFiltrate();
       expect(result.map(i => i.id)).toEqual([2]);
     });
 
-    it('filteredIssues() excludes deleted and archived by default', () => {
-      component.issues.set([
-        issue({ id: 1, title: 'live' }),
-        issue({ id: 2, title: 'gone', archivedAt: '2026-09-19T08:00:00.000Z' }),
-        issue({ id: 3, title: 'del', deletedAt: '2026-09-19T08:00:00.000Z' })
+    it('segnalazioniFiltrate() excludes deleted and archived by default', () => {
+      component.segnalazioni.set([
+        segnalazione({ id: 1, title: 'live' }),
+        segnalazione({ id: 2, title: 'gone', archivedAt: '2026-09-19T08:00:00.000Z' }),
+        segnalazione({ id: 3, title: 'del', deletedAt: '2026-09-19T08:00:00.000Z' })
       ]);
 
-      expect(component.filteredIssues().map(i => i.id)).toEqual([1]);
+      expect(component.segnalazioniFiltrate().map(i => i.id)).toEqual([1]);
     });
 
-    it('filteredIssues() filters by select field values', () => {
-      component.issues.set([
-        issue({ id: 1, selectValues: { 10: ['LOW'] } }),
-        issue({ id: 2, selectValues: { 10: ['HIGH'] } })
+    it('segnalazioniFiltrate() filters by select field values', () => {
+      component.segnalazioni.set([
+        segnalazione({ id: 1, selectValues: { 10: ['LOW'] } }),
+        segnalazione({ id: 2, selectValues: { 10: ['HIGH'] } })
       ]);
-      component.selectFieldFilters.set([{ field: { id: 10 } as IssueField, options: [] }]);
+      component.selectFieldFilters.set([{ field: { id: 10 } as SegnalazioneCampo, options: [] }]);
       component.setSelectFilter(10, ['LOW']);
-      expect(component.filteredIssues().map(i => i.id)).toEqual([1]);
+      expect(component.segnalazioniFiltrate().map(i => i.id)).toEqual([1]);
     });
 
     it('setSelectFilter() stores empty array as null', () => {
@@ -203,7 +203,7 @@ describe('HomeComponent', () => {
   describe('load()', () => {
     it('does nothing when no project is selected', () => {
       fixture.detectChanges();
-      expect(issuesApi.issues).not.toHaveBeenCalled();
+      expect(segnalazioniApi.segnalazioni).not.toHaveBeenCalled();
     });
 
     it('fetches issues, users, fields, archived, and (admin) deleted', () => {
@@ -211,19 +211,19 @@ describe('HomeComponent', () => {
       currentProjectIdSignal.set(5);
       fixture.detectChanges();
 
-      expect(issuesApi.issues).toHaveBeenCalledWith(5);
-      expect(issuesApi.projectUsers).toHaveBeenCalledWith(5);
-      expect(issuesApi.issueFields).toHaveBeenCalledWith(5);
-      expect(issuesApi.issueFieldOptions).toHaveBeenCalledWith(5);
-      expect(issuesApi.archivedIssues).toHaveBeenCalledWith(5);
-      expect(issuesApi.deletedIssues).toHaveBeenCalledWith(5);
+      expect(segnalazioniApi.segnalazioni).toHaveBeenCalledWith(5);
+      expect(segnalazioniApi.projectUsers).toHaveBeenCalledWith(5);
+      expect(segnalazioniApi.segnalazioneCampi).toHaveBeenCalledWith(5);
+      expect(segnalazioniApi.segnalazioneCampoOpzioni).toHaveBeenCalledWith(5);
+      expect(segnalazioniApi.segnalazioniArchiviate).toHaveBeenCalledWith(5);
+      expect(segnalazioniApi.segnalazioniEliminate).toHaveBeenCalledWith(5);
     });
 
     it('omits deletedIssues when not admin', () => {
       userSignal.set(teamUser);
       currentProjectIdSignal.set(6);
       fixture.detectChanges();
-      expect(issuesApi.deletedIssues).not.toHaveBeenCalled();
+      expect(segnalazioniApi.segnalazioniEliminate).not.toHaveBeenCalled();
     });
   });
 
@@ -236,28 +236,28 @@ describe('HomeComponent', () => {
       expect(navigateSpy).toHaveBeenCalledWith('/archivio');
     });
 
-    it('openDetail() sets selectedIssueId', () => {
-      component.openDetail({ id: 42 } as IssueSummary);
-      expect(component.selectedIssueId).toBe(42);
+    it('openDetail() sets segnalazioneSelezionataId', () => {
+      component.openDetail({ id: 42 } as SegnalazioneSummary);
+      expect(component.segnalazioneSelezionataId).toBe(42);
     });
 
-    it('onIssueCreated() prepends to issues', () => {
-      component.issues.set([issue({ id: 1 })]);
-      component.onIssueCreated(issue({ id: 99 }));
-      expect(component.issues()[0].id).toBe(99);
-      expect(component.issues()[1].id).toBe(1);
+    it('onSegnalazioneCreata() prepends to issues', () => {
+      component.segnalazioni.set([segnalazione({ id: 1 })]);
+      component.onSegnalazioneCreata(segnalazione({ id: 99 }));
+      expect(component.segnalazioni()[0].id).toBe(99);
+      expect(component.segnalazioni()[1].id).toBe(1);
     });
 
-    it('onIssueChanged() replaces the matching issue', () => {
-      component.issues.set([issue({ id: 1, title: 'old' }), issue({ id: 2 })]);
-      component.onIssueChanged(issue({ id: 1, title: 'new' }));
-      expect(component.issues()[0].title).toBe('new');
+    it('onSegnalazioneModificata() replaces the matching issue', () => {
+      component.segnalazioni.set([segnalazione({ id: 1, title: 'old' }), segnalazione({ id: 2 })]);
+      component.onSegnalazioneModificata(segnalazione({ id: 1, title: 'new' }));
+      expect(component.segnalazioni()[0].title).toBe('new');
     });
 
-    it('onIssueDeleted() removes the matching issue', () => {
-      component.issues.set([issue({ id: 1 }), issue({ id: 2 })]);
-      component.onIssueDeleted(1);
-      expect(component.issues().map(i => i.id)).toEqual([2]);
+    it('onSegnalazioneEliminata() removes the matching issue', () => {
+      component.segnalazioni.set([segnalazione({ id: 1 }), segnalazione({ id: 2 })]);
+      component.onSegnalazioneEliminata(1);
+      expect(component.segnalazioni().map(i => i.id)).toEqual([2]);
     });
   });
 });

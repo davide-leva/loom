@@ -5,7 +5,7 @@ import { MainLayoutComponent } from './main-layout.component';
 import { AuthService } from '../../services/auth/auth.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
-import { IssueNotificationsService } from '../../services/issue-notifications/issue-notifications.service';
+import { NotificheSegnalazioniService } from '../../services/notifiche-segnalazioni/notifiche-segnalazioni.service';
 import { VersionService } from '../../services/version/version.service';
 import type { CurrentUser, ProjectSummary } from '../../shared/models/auth.types';
 
@@ -60,7 +60,7 @@ describe('MainLayoutComponent', () => {
         { provide: AuthService, useValue: { ...auth, user: userSignal } },
         { provide: ProjectContextService, useValue: projectContext },
         { provide: LiveSyncService, useValue: liveSync },
-        { provide: IssueNotificationsService, useValue: notifications },
+        { provide: NotificheSegnalazioniService, useValue: notifications },
         { provide: VersionService, useValue: version }
       ]
     }).compileComponents();
@@ -79,7 +79,7 @@ describe('MainLayoutComponent', () => {
     userSignal.set({
       id: 1, username: 'mario', displayName: 'Mario', email: 'm@e.com',
       role: 'ADMIN', companyName: 'Acme', companyId: 10, primaryColor: 'blue',
-      companyLogoUrl: null, internalCompanyName: 'Tickets', internalLogoUrl: null
+      companyLogoUrl: null, internalCompanyName: 'Loom', internalLogoUrl: null
     });
 
     const items = component.userMenuItems();
@@ -90,11 +90,11 @@ describe('MainLayoutComponent', () => {
     userSignal.set({
       id: 1, username: 'mario', displayName: 'Mario', email: 'm@e.com',
       role: 'USER', companyName: null, companyId: null, primaryColor: 'blue',
-      companyLogoUrl: null, internalCompanyName: 'Tickets', internalLogoUrl: null
+      companyLogoUrl: null, internalCompanyName: 'Loom', internalLogoUrl: null
     });
 
     const items = component.userMenuItems();
-    expect(items[0].label).toBe('Compagnia: Tickets');
+    expect(items[0].label).toBe('Compagnia: Loom');
   });
 
   it('userMenuItems() falls back to "Interna" when no company', () => {

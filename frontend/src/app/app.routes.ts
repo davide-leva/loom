@@ -30,9 +30,9 @@ export const routes: Routes = [
         canActivate: [() => ['ADMIN', 'TEAM'].includes(inject(AuthService).user()?.role ?? '')
           ? true : inject(Router).createUrlTree(['/dashboard'])] },
       { path: 'preferenze-email', loadComponent: () => import('./components/email-preferences/email-preferences.component').then(module => module.EmailPreferencesComponent) },
-      { path: 'anomalie', loadComponent: () => import('./components/issue-board/issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Anomalie', issueType: 'ANOMALY' } },
-      { path: 'migliorie', loadComponent: () => import('./components/issue-board/issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Migliorie', issueType: 'IMPROVEMENT' } },
-      { path: 'implementazioni', loadComponent: () => import('./components/issue-board/issue-board.component').then(module => module.IssueBoardComponent), data: { title: 'Implementazioni', issueType: 'IMPLEMENTATION' } },
+      { path: 'anomalie', loadComponent: () => import('./components/segnalazioni-board/segnalazioni-board.component').then(module => module.SegnalazioniBoardComponent), data: { title: 'Anomalie', issueType: 'ANOMALY' } },
+      { path: 'migliorie', loadComponent: () => import('./components/segnalazioni-board/segnalazioni-board.component').then(module => module.SegnalazioniBoardComponent), data: { title: 'Migliorie', issueType: 'IMPROVEMENT' } },
+      { path: 'implementazioni', loadComponent: () => import('./components/segnalazioni-board/segnalazioni-board.component').then(module => module.SegnalazioniBoardComponent), data: { title: 'Implementazioni', issueType: 'IMPLEMENTATION' } },
       {
         path: 'pianificazione',
         loadComponent: () => import('./components/planning/planning.component').then(module => module.PlanningComponent),
@@ -41,13 +41,13 @@ export const routes: Routes = [
       },
       {
         path: 'eliminate',
-        loadComponent: () => import('./components/deleted-issues/deleted-issues.component').then(module => module.DeletedIssuesComponent),
+        loadComponent: () => import('./components/segnalazioni-eliminate/segnalazioni-eliminate.component').then(module => module.SegnalazioniEliminateComponent),
         canActivate: [() => inject(AuthService).user()?.role === 'ADMIN'
           ? true : inject(Router).createUrlTree(['/dashboard'])]
       },
       {
         path: 'archivio',
-        loadComponent: () => import('./components/archived-issues/archived-issues.component').then(module => module.ArchivedIssuesComponent)
+        loadComponent: () => import('./components/segnalazioni-archiviate/segnalazioni-archiviate.component').then(module => module.SegnalazioniArchiviateComponent)
       },
       {
         path: 'configurazione',
@@ -70,9 +70,9 @@ export const routes: Routes = [
             loadComponent: () => import('./components/config/team-users/team-users.component').then(module => module.TeamUsersComponent)
           },
           {
-            path: 'campi-ticket',
-            loadComponent: () => import('./components/config/ticket-fields/ticket-fields.component')
-              .then(module => module.TicketFieldsComponent)
+            path: 'campi-segnalazione',
+            loadComponent: () => import('./components/config/campi-segnalazione/campi-segnalazione.component')
+              .then(module => module.CampiSegnalazioneComponent)
           },
           {
             path: 'autenticazione-esterna',

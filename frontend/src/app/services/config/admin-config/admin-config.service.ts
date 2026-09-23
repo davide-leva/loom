@@ -10,10 +10,10 @@ import type {
   CompanyUserInput,
   FieldScope,
   FieldType,
-  IssueField,
-  IssueFieldInput,
-  IssueFieldOption,
-  IssueFieldOptionInput,
+  SegnalazioneCampo,
+  SegnalazioneCampoInput,
+  SegnalazioneCampoOpzione,
+  SegnalazioneCampoOpzioneInput,
   Project,
   ProjectInput,
   TeamRole,
@@ -29,10 +29,10 @@ export type {
   CompanyUserInput,
   FieldScope,
   FieldType,
-  IssueField,
-  IssueFieldInput,
-  IssueFieldOption,
-  IssueFieldOptionInput,
+  SegnalazioneCampo,
+  SegnalazioneCampoInput,
+  SegnalazioneCampoOpzione,
+  SegnalazioneCampoOpzioneInput,
   Project,
   ProjectInput,
   TeamRole,
@@ -147,41 +147,41 @@ export class AdminConfigService {
     });
   }
 
-  issueFields(projectId: number): Observable<IssueField[]> {
-    return this.http.get<IssueField[]>(`/api/issue-fields/project/${projectId}`, {
+  segnalazioneCampi(projectId: number): Observable<SegnalazioneCampo[]> {
+    return this.http.get<SegnalazioneCampo[]>(`/api/issue-fields/project/${projectId}`, {
       headers: this.auth.authHeaders()
     });
   }
 
-  createIssueField(input: IssueFieldInput & { projectId: number }): Observable<IssueField> {
-    return this.http.post<IssueField>('/api/issue-fields', input, { headers: this.auth.authHeaders() });
+  creaSegnalazioneCampo(input: SegnalazioneCampoInput & { projectId: number }): Observable<SegnalazioneCampo> {
+    return this.http.post<SegnalazioneCampo>('/api/issue-fields', input, { headers: this.auth.authHeaders() });
   }
 
-  updateIssueField(id: number, input: IssueFieldInput): Observable<IssueField> {
-    return this.http.put<IssueField>(`/api/issue-fields/${id}`, input, { headers: this.auth.authHeaders() });
+  aggiornaSegnalazioneCampo(id: number, input: SegnalazioneCampoInput): Observable<SegnalazioneCampo> {
+    return this.http.put<SegnalazioneCampo>(`/api/issue-fields/${id}`, input, { headers: this.auth.authHeaders() });
   }
 
-  deleteIssueField(id: number): Observable<void> {
+  eliminaSegnalazioneCampo(id: number): Observable<void> {
     return this.http.delete<void>(`/api/issue-fields/${id}`, { headers: this.auth.authHeaders() });
   }
 
-  issueFieldOptions(definitionId: number): Observable<IssueFieldOption[]> {
-    return this.http.get<IssueFieldOption[]>(`/api/issue-field-options/field/${definitionId}`, {
+  segnalazioneCampoOpzioni(definitionId: number): Observable<SegnalazioneCampoOpzione[]> {
+    return this.http.get<SegnalazioneCampoOpzione[]>(`/api/issue-field-options/field/${definitionId}`, {
       headers: this.auth.authHeaders()
     });
   }
 
-  createIssueFieldOption(input: IssueFieldOptionInput & { definitionId: number }): Observable<IssueFieldOption> {
-    return this.http.post<IssueFieldOption>('/api/issue-field-options', input, { headers: this.auth.authHeaders() });
+  creaSegnalazioneCampoOpzione(input: SegnalazioneCampoOpzioneInput & { definitionId: number }): Observable<SegnalazioneCampoOpzione> {
+    return this.http.post<SegnalazioneCampoOpzione>('/api/issue-field-options', input, { headers: this.auth.authHeaders() });
   }
 
-  updateIssueFieldOption(id: number, input: { value: string; label: string; active: boolean }): Observable<IssueFieldOption> {
-    return this.http.put<IssueFieldOption>(`/api/issue-field-options/${id}`, input, {
+  aggiornaSegnalazioneCampoOpzione(id: number, input: { value: string; label: string; active: boolean }): Observable<SegnalazioneCampoOpzione> {
+    return this.http.put<SegnalazioneCampoOpzione>(`/api/issue-field-options/${id}`, input, {
       headers: this.auth.authHeaders()
     });
   }
 
-  deleteIssueFieldOption(id: number): Observable<void> {
+  eliminaSegnalazioneCampoOpzione(id: number): Observable<void> {
     return this.http.delete<void>(`/api/issue-field-options/${id}`, { headers: this.auth.authHeaders() });
   }
 

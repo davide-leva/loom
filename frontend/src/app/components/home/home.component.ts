@@ -13,14 +13,14 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { forkJoin } from 'rxjs';
 import { AuthService } from '../../services/auth/auth.service';
-import { IssuesService, ISSUE_STATUSES, STATUS_LABELS, TYPE_LABELS } from '../../services/issues/issues.service';
-import type { IssueField, IssueFieldOption, IssueStatus, IssueSummary, ProjectUserSummary } from '../../services/issues/issues.service';
-import { IssueCreateDialogComponent } from '../issue-create-dialog/issue-create-dialog.component';
-import { IssueDetailDialogComponent } from '../issue-detail-dialog/issue-detail-dialog.component';
-import { IssueReportDialogComponent } from '../issue-report-dialog/issue-report-dialog.component';
+import { SegnalazioniService, SEGNALAZIONE_STATUS, STATUS_LABELS, TYPE_LABELS } from '../../services/segnalazioni/segnalazioni.service';
+import type { SegnalazioneCampo, SegnalazioneCampoOpzione, StatusSegnalazione, SegnalazioneSummary, ProjectUserSummary } from '../../services/segnalazioni/segnalazioni.service';
+import { SegnalazioneCreateDialogComponent } from '../segnalazione-create-dialog/segnalazione-create-dialog.component';
+import { SegnalazioneDetailDialogComponent } from '../segnalazione-detail-dialog/segnalazione-detail-dialog.component';
+import { ReportSegnalazioniDialogComponent } from '../report-segnalazioni-dialog/report-segnalazioni-dialog.component';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
-import { SelectFilterValue, filterIssues } from '../../services/issues/issue-filters';
+import { SelectFilterValue, filtraSegnalazioni } from '../../services/segnalazioni/segnalazione-filtri';
 
 interface SelectOption<T> {
   label: string;
@@ -28,13 +28,13 @@ interface SelectOption<T> {
 }
 
 interface SelectFieldFilter {
-  field: IssueField;
-  options: IssueFieldOption[];
+  field: SegnalazioneCampo;
+  options: SegnalazioneCampoOpzione[];
 }
 
 @Component({
   selector: 'app-home',
-  imports: [BadgeModule, ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, IssueCreateDialogComponent, IssueDetailDialogComponent, IssueReportDialogComponent, MultiSelectModule, SelectModule, TableModule, TagModule],
+  imports: [BadgeModule, ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, SegnalazioneCreateDialogComponent, SegnalazioneDetailDialogComponent, ReportSegnalazioniDialogComponent, MultiSelectModule, SelectModule, TableModule, TagModule],
   template: `
     <p-card styleClass="dashboard-card">
       <div class="page-title">
@@ -110,9 +110,9 @@ interface SelectFieldFilter {
           <p class="error-message">{{ error() }}</p>
         }
 
-        <p-table [value]="filteredIssues()" [loading]="loading()" [paginator]="true" [rows]="12"
+        <p-table [value]="segnalazioniFiltrate()" [loading]="loading()" [paginator]="true" [rows]="12"
                  [rowsPerPageOptions]="[12, 25, 50]" [sortField]="'createdAt'" [sortOrder]="-1"
-                 responsiveLayout="scroll" styleClass="issue-table">
+                 responsiveLayout="scroll" styleClass="tabella-segnalazioni">
           <ng-template pTemplate="header">
             <tr>
               <th pSortableColumn="id">ID <p-sortIcon field="id" /></th>
@@ -123,14 +123,14 @@ interface SelectFieldFilter {
               <th pSortableColumn="createdAt">Data segnalazione <p-sortIcon field="createdAt" /></th>
             </tr>
           </ng-template>
-          <ng-template pTemplate="body" let-issue>
-            <tr class="clickable-row" [class.internal-issue]="issue.internal" (click)="openDetail(issue)">
-              <td class="id-cell">#{{ issue.id }}</td>
-              <td>{{ issue.title }}</td>
-              <td><p-tag [value]="statusLabel(issue.status)" [severity]="statusSeverity(issue.status)" /></td>
-              <td>{{ typeLabel(issue.issueType) }}</td>
-              <td>{{ issue.issuerUsername || 'Non assegnato' }}</td>
-              <td>{{ issue.createdAt | date:'dd/MM/yyyy HH:mm' }}</td>
+          <ng-template pTemplate="body" let-segnalazione>
+            <tr class="clickable-row" [class.segnalazione-interna]="segnalazione.internal" (click)="openDetail(segnalazione)">
+              <td class="id-cell">#{{ segnalazione.id }}</td>
+              <td>{{ segnalazione.title }}</td>
+              <td><p-tag [value]="statusLabel(segnalazione.status)" [severity]="statusSeverity(segnalazione.status)" /></td>
+              <td>{{ typeLabel(segnalazione.issueType) }}</td>
+              <td>{{ segnalazione.issuerUsername || 'Non assegnato' }}</td>
+              <td>{{ segnalazione.createdAt | date:'dd/MM/yyyy HH:mm' }}</td>
             </tr>
           </ng-template>
           <ng-template pTemplate="emptymessage">
@@ -140,15 +140,15 @@ interface SelectFieldFilter {
       }
 
       @if (createDialogVisible) {
-        <app-issue-create-dialog [projectId]="projects.currentProjectId()" [users]="users()"
-                                 (created)="onIssueCreated($event)" (closed)="createDialogVisible = false" />
+        <app-segnalazione-create-dialog [projectId]="projects.currentProjectId()" [users]="users()"
+                                 (created)="onSegnalazioneCreata($event)" (closed)="createDialogVisible = false" />
       }
-      @if (selectedIssueId !== null) {
-        <app-issue-detail-dialog [issueId]="selectedIssueId" (issueChanged)="onIssueChanged($event)" (issueDeleted)="onIssueDeleted($event)"
-                                 (closed)="selectedIssueId = null" />
+      @if (segnalazioneSelezionataId !== null) {
+        <app-segnalazione-detail-dialog [issueId]="segnalazioneSelezionataId" (issueChanged)="onSegnalazioneModificata($event)" (issueDeleted)="onSegnalazioneEliminata($event)"
+                                 (closed)="segnalazioneSelezionataId = null" />
       }
       @if (reportDialogVisible) {
-        <app-issue-report-dialog [projectId]="projects.currentProjectId()" [users]="users()"
+        <app-report-segnalazioni-dialog [projectId]="projects.currentProjectId()" [users]="users()"
                                  (closed)="reportDialogVisible = false" />
       }
     </p-card>
@@ -157,12 +157,12 @@ interface SelectFieldFilter {
 })
 export class HomeComponent {
   readonly projects = inject(ProjectContextService);
-  private readonly issuesApi = inject(IssuesService);
+  private readonly segnalazioniApi = inject(SegnalazioniService);
   private readonly eventSync = inject(LiveSyncService);
   private readonly router = inject(Router);
   readonly auth = inject(AuthService);
 
-  readonly issues = signal<IssueSummary[]>([]);
+  readonly segnalazioni = signal<SegnalazioneSummary[]>([]);
   readonly users = signal<ProjectUserSummary[]>([]);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -171,24 +171,24 @@ export class HomeComponent {
   readonly selectFieldFilters = signal<SelectFieldFilter[]>([]);
   createDialogVisible = false;
   reportDialogVisible = false;
-  selectedIssueId: number | null = null;
+  segnalazioneSelezionataId: number | null = null;
 
   navigate(path: string): void {
     this.router.navigateByUrl(path);
   }
 
   textFilter = '';
-  statusFilter: IssueStatus | 'ALL' = 'ALL';
-  typeFilter: IssueSummary['issueType'] | 'ALL' | 'NONE' = 'ALL';
+  statusFilter: StatusSegnalazione | 'ALL' = 'ALL';
+  typeFilter: SegnalazioneSummary['issueType'] | 'ALL' | 'NONE' = 'ALL';
   issuerFilter: number | 'ALL' | 'NONE' = 'ALL';
   dateRange: Date[] | null = null;
   selectFilterValues: Record<number, string[] | null> = {};
 
-  readonly statusOptions: SelectOption<IssueStatus | 'ALL'>[] = [
+  readonly statusOptions: SelectOption<StatusSegnalazione | 'ALL'>[] = [
     { label: 'Tutti', value: 'ALL' },
-    ...ISSUE_STATUSES.map(status => ({ label: STATUS_LABELS[status], value: status }))
+    ...SEGNALAZIONE_STATUS.map(status => ({ label: STATUS_LABELS[status], value: status }))
   ];
-  readonly typeOptions: SelectOption<IssueSummary['issueType'] | 'ALL' | 'NONE'>[] = [
+  readonly typeOptions: SelectOption<SegnalazioneSummary['issueType'] | 'ALL' | 'NONE'>[] = [
     { label: 'Tutte', value: 'ALL' },
     { label: 'Non categorizzate', value: 'NONE' },
     { label: TYPE_LABELS.ANOMALY, value: 'ANOMALY' },
@@ -202,8 +202,8 @@ export class HomeComponent {
     ...this.users().map(user => ({ label: this.userLabel(user), value: user.id }))
   ]);
 
-  filteredIssues(): IssueSummary[] {
-    return filterIssues(this.issues(), {
+  segnalazioniFiltrate(): SegnalazioneSummary[] {
+    return filtraSegnalazioni(this.segnalazioni(), {
       text: this.textFilter,
       status: this.statusFilter,
       type: this.typeFilter,
@@ -256,22 +256,22 @@ export class HomeComponent {
     this.error.set(null);
     const role = this.auth.user()?.role;
     const requests: { [key: string]: any } = {
-      issues: this.issuesApi.issues(projectId),
-      users: this.issuesApi.projectUsers(projectId),
-      fields: this.issuesApi.issueFields(projectId),
-      fieldOptions: this.issuesApi.issueFieldOptions(projectId),
-      archived: this.issuesApi.archivedIssues(projectId)
+      segnalazioni: this.segnalazioniApi.segnalazioni(projectId),
+      users: this.segnalazioniApi.projectUsers(projectId),
+      fields: this.segnalazioniApi.segnalazioneCampi(projectId),
+      fieldOptions: this.segnalazioniApi.segnalazioneCampoOpzioni(projectId),
+      archived: this.segnalazioniApi.segnalazioniArchiviate(projectId)
     };
     if (role === 'ADMIN') {
-      requests['deleted'] = this.issuesApi.deletedIssues(projectId);
+      requests['deleted'] = this.segnalazioniApi.segnalazioniEliminate(projectId);
     }
     forkJoin(requests).subscribe({
       next: (results: any) => {
         if (sequence !== this.loadSequence || projectId !== this.projects.currentProjectId()) return;
-        this.issues.set(results['issues']);
+        this.segnalazioni.set(results['segnalazioni']);
         this.users.set(results['users']);
-        this.archivedCount.set((results['archived'] as IssueSummary[]).length);
-        this.deletedCount.set(results['deleted'] ? (results['deleted'] as IssueSummary[]).length : 0);
+        this.archivedCount.set((results['archived'] as SegnalazioneSummary[]).length);
+        this.deletedCount.set(results['deleted'] ? (results['deleted'] as SegnalazioneSummary[]).length : 0);
         this.updateSelectFieldFilters(results['fields'], results['fieldOptions']);
         this.loading.set(false);
       },
@@ -283,13 +283,13 @@ export class HomeComponent {
     });
   }
 
-  private updateSelectFieldFilters(fields: IssueField[], options: IssueFieldOption[]): void {
+  private updateSelectFieldFilters(fields: SegnalazioneCampo[], options: SegnalazioneCampoOpzione[]): void {
     const selectFields = (fields ?? []).filter(field => field.type === 'SELECT');
     if (selectFields.length === 0) {
       this.selectFieldFilters.set([]);
       return;
     }
-    const optionsByField = new Map<number, IssueFieldOption[]>();
+    const optionsByField = new Map<number, SegnalazioneCampoOpzione[]>();
     for (const option of options ?? []) {
       if (!option.active) continue;
       const list = optionsByField.get(option.definitionId) ?? [];
@@ -307,20 +307,22 @@ export class HomeComponent {
     this.createDialogVisible = true;
   }
 
-  onIssueCreated(issue: IssueSummary): void {
-    this.issues.update(items => [issue, ...items]);
+  onSegnalazioneCreata(segnalazione: SegnalazioneSummary): void {
+    this.segnalazioni.update(items => [segnalazione, ...items]);
   }
 
-  openDetail(issue: IssueSummary): void {
-    this.selectedIssueId = issue.id;
+  openDetail(segnalazione: SegnalazioneSummary): void {
+    this.segnalazioneSelezionataId = segnalazione.id;
   }
 
-  onIssueChanged(issue: IssueSummary): void {
-    this.issues.update(items => items.map(item => item.id === issue.id ? issue : item));
+  onSegnalazioneModificata(segnalazione: SegnalazioneSummary): void {
+    this.segnalazioni.update(items => items.map(item =>
+      item.id === segnalazione.id ? segnalazione : item
+    ));
   }
 
-  onIssueDeleted(issueId: number): void {
-    this.issues.update(items => items.filter(item => item.id !== issueId));
+  onSegnalazioneEliminata(segnalazioneId: number): void {
+    this.segnalazioni.update(items => items.filter(item => item.id !== segnalazioneId));
   }
 
   resetFilters(): void {
@@ -332,11 +334,11 @@ export class HomeComponent {
     this.selectFilterValues = {};
   }
 
-  statusLabel(status: IssueStatus): string { return STATUS_LABELS[status]; }
-  typeLabel(type: IssueSummary['issueType']): string { return type === null ? 'Non categorizzata' : TYPE_LABELS[type]; }
+  statusLabel(status: StatusSegnalazione): string { return STATUS_LABELS[status]; }
+  typeLabel(type: SegnalazioneSummary['issueType']): string { return type === null ? 'Non categorizzata' : TYPE_LABELS[type]; }
 
-  statusSeverity(status: IssueStatus): 'secondary' | 'info' | 'warn' | 'success' | 'contrast' {
-    const severities: Record<IssueStatus, 'secondary' | 'info' | 'warn' | 'success' | 'contrast'> = {
+  statusSeverity(status: StatusSegnalazione): 'secondary' | 'info' | 'warn' | 'success' | 'contrast' {
+    const severities: Record<StatusSegnalazione, 'secondary' | 'info' | 'warn' | 'success' | 'contrast'> = {
       REPORTED: 'info',
       IN_PROGRESS: 'warn',
       COMPLETED: 'success',
@@ -348,7 +350,7 @@ export class HomeComponent {
 
   private resetForProject(): void {
     this.loadSequence++;
-    this.issues.set([]);
+    this.segnalazioni.set([]);
     this.users.set([]);
     this.deletedCount.set(0);
     this.archivedCount.set(0);

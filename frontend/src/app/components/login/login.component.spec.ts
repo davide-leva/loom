@@ -41,7 +41,7 @@ describe('LoginComponent', () => {
   const user: CurrentUser = {
     id: 1, username: 'mario', displayName: 'Mario', email: 'm@e.com',
     role: 'ADMIN', companyName: 'Acme', companyId: 10, primaryColor: 'blue',
-    companyLogoUrl: null, internalCompanyName: 'Tickets', internalLogoUrl: null
+    companyLogoUrl: null, internalCompanyName: 'Loom', internalLogoUrl: null
   };
 
   beforeEach(async () => {
@@ -87,7 +87,7 @@ describe('LoginComponent', () => {
 
   function flushBranding(): void {
     const req = http.expectOne('/api/branding/internal');
-    req.flush({ name: 'Tickets', primaryColor: 'blue', logoUrl: null });
+    req.flush({ name: 'Loom', primaryColor: 'blue', logoUrl: null });
   }
 
   function setupNoExternal(): void {

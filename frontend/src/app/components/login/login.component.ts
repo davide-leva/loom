@@ -29,7 +29,7 @@ export class LoginComponent implements OnInit {
   private readonly projects = inject(ProjectContextService);
   private readonly http = inject(HttpClient);
   internalBrand: { name: string; primaryColor: string; logoUrl: string | null } =
-    { name: 'Tickets', primaryColor: 'blue', logoUrl: null };
+    { name: 'Loom', primaryColor: 'blue', logoUrl: null };
   readonly loomLogoUrl = LOOM_LOGO_URL;
   readonly loomLogotypeUrl = LOOM_LOGOTYPE_URL;
 

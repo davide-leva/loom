@@ -2,8 +2,8 @@
 # backup.sh — snapshot data/, .env, Caddyfile into backups/.
 #
 # Usage:
-#   ./backup.sh                  # creates backups/ticket-platform-<ISO_DATE>.tar.gz
-#   ./backup.sh --label mydb     # append a label, e.g. ticket-platform-...-mydb.tar.gz
+#   ./backup.sh                  # creates backups/loom-<ISO_DATE>.tar.gz
+#   ./backup.sh --label mydb     # append a label, e.g. loom-...-mydb.tar.gz
 #   BACKUP_DIR=/mnt/backup ./backup.sh
 #                                # override output directory
 #   ./backup.sh --help
@@ -41,9 +41,9 @@ if [[ -n "${LABEL}" ]]; then
     # sanitise label — only safe filename chars
     LABEL="$(printf '%s' "${LABEL}" | tr -c 'A-Za-z0-9._-' '-')"
     [[ -z "${LABEL}" ]] && { echo "Label becomes empty after sanitisation" >&2; exit 1; }
-    ARCHIVE="${BACKUP_DIR}/ticket-platform-${STAMP}-${LABEL}.tar.gz"
+    ARCHIVE="${BACKUP_DIR}/loom-${STAMP}-${LABEL}.tar.gz"
 else
-    ARCHIVE="${BACKUP_DIR}/ticket-platform-${STAMP}.tar.gz"
+    ARCHIVE="${BACKUP_DIR}/loom-${STAMP}.tar.gz"
 fi
 
 # Collect what to include. Only paths that exist, in a fixed order.
@@ -57,9 +57,9 @@ echo "  includes: ${INCLUDE[*]}"
 echo
 
 tar -czf "${ARCHIVE}" \
-    --transform 's|^data|ticket-platform/data|' \
-    --transform 's|^\.env$|ticket-platform/.env|' \
-    --transform 's|^Caddyfile$|ticket-platform/Caddyfile|' \
+    --transform 's|^data|loom/data|' \
+    --transform 's|^\.env$|loom/.env|' \
+    --transform 's|^Caddyfile$|loom/Caddyfile|' \
     -C "${REPO_ROOT}" \
     "${INCLUDE[@]}"
 

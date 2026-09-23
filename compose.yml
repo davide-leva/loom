@@ -1,14 +1,14 @@
 services:
   database:
     image: postgres:16-alpine
-    container_name: tickets-database
+    container_name: loom-database
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      POSTGRES_USER: ${DB_USER:-dbatickets}
+      POSTGRES_USER: ${DB_USER:-dbaloom}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      POSTGRES_DB: ${DB_NAME:-tickets}
+      POSTGRES_DB: ${DB_NAME:-loom}
     # Bound to loopback so backend running on the host (./scripts/dev.sh)
     # can reach it via localhost:5432. Still unreachable from outside the host.
     # Docker-network traffic between backend/database containers uses the
@@ -27,8 +27,8 @@ services:
       retries: 10
 
   backend:
-    image: ghcr.io/davide-leva/ticket-platform/backend:latest
-    container_name: tickets-backend
+    image: ghcr.io/davide-leva/loom/backend:latest
+    container_name: loom-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -36,15 +36,15 @@ services:
       database:
         condition: service_healthy
     environment:
-      DB_URL: jdbc:postgresql://database:5432/${DB_NAME:-tickets}
-      DB_USER: ${DB_USER:-dbatickets}
+      DB_URL: jdbc:postgresql://database:5432/${DB_NAME:-loom}
+      DB_USER: ${DB_USER:-dbaloom}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ATTACHMENTS_ROOT_FOLDER: /data/attachments
       ROOT_FOLDER: /data/branding
       ATTACHMENTS_MAX_FILE_SIZE: ${ATTACHMENTS_MAX_FILE_SIZE:-25MB}
       MAIL_NOTIFICATIONS_ENABLED: ${MAIL_NOTIFICATIONS_ENABLED:-false}
-      MAIL_FROM: ${MAIL_FROM:-no-reply@tickets.local}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@loom.local}
       MAIL_NOTIFICATIONS_DELAY: ${MAIL_NOTIFICATIONS_DELAY:-5m}
       SMTP_HOST: ${SMTP_HOST:-localhost}
       SMTP_PORT: ${SMTP_PORT:-25}
@@ -59,8 +59,8 @@ services:
       - ./data/branding:/data/branding
 
   frontend:
-    image: ghcr.io/davide-leva/ticket-platform/frontend:latest
-    container_name: tickets-frontend
+    image: ghcr.io/davide-leva/loom/frontend:latest
+    container_name: loom-frontend
     restart: unless-stopped
     depends_on:
       - backend
@@ -78,7 +78,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: tickets-caddy
+    container_name: loom-caddy
     restart: unless-stopped
     depends_on:
       - frontend

@@ -22,7 +22,7 @@
   letter-spacing: .08em;
   text-transform: uppercase;
 }
-.brand-logotype { display: block; width: 50%; max-width: 220px; margin: 14px auto 0; height: auto; }
+.brand-logotype { display: block; width: 80%; margin: 14px auto 0; height: auto; }
 
 :host ::ng-deep .login-card { display: block; width: min(100%, 380px); margin: auto; }
 :host ::ng-deep .login-card .p-card-body { padding: 24px; }

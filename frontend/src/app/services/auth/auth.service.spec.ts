@@ -40,7 +40,7 @@ describe('AuthService', () => {
     const loginResponse: LoginResponse = { accessToken: 'token-abc', tokenType: 'Bearer' };
     loginReq.flush(loginResponse);
 
-    expect(sessionStorage.getItem('sf2-tickets-access-token')).toBe('token-abc');
+    expect(sessionStorage.getItem('loom-access-token')).toBe('token-abc');
 
     const meReq = http.expectOne('/api/auth/me');
     expect(meReq.request.headers.get('Authorization')).toBe('Bearer token-abc');
@@ -54,15 +54,15 @@ describe('AuthService', () => {
     service.login('mario', 'bad').subscribe({ error: () => undefined });
     const req = http.expectOne('/api/auth/login');
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
-    expect(sessionStorage.getItem('sf2-tickets-access-token')).toBeNull();
+    expect(sessionStorage.getItem('loom-access-token')).toBeNull();
     expect(service.user()).toBeNull();
   });
 
   it('logout() clears storage and resets the user signal', () => {
-    sessionStorage.setItem('sf2-tickets-access-token', 'token-abc');
+    sessionStorage.setItem('loom-access-token', 'token-abc');
     service.user.set(user);
     service.logout();
-    expect(sessionStorage.getItem('sf2-tickets-access-token')).toBeNull();
+    expect(sessionStorage.getItem('loom-access-token')).toBeNull();
     expect(service.user()).toBeNull();
   });
 
@@ -73,7 +73,7 @@ describe('AuthService', () => {
   });
 
   it('hasValidSession() resolves true on success', () => {
-    sessionStorage.setItem('sf2-tickets-access-token', 'token-abc');
+    sessionStorage.setItem('loom-access-token', 'token-abc');
     let result: boolean | undefined;
     service.hasValidSession().subscribe(value => { result = value; });
     http.expectOne('/api/auth/me').flush(user);
@@ -81,20 +81,20 @@ describe('AuthService', () => {
   });
 
   it('hasValidSession() logs out on 401', () => {
-    sessionStorage.setItem('sf2-tickets-access-token', 'token-abc');
+    sessionStorage.setItem('loom-access-token', 'token-abc');
     service.user.set(user);
     let result: boolean | undefined;
     service.hasValidSession().subscribe(value => { result = value; });
     http.expectOne('/api/auth/me')
       .flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
     expect(result).toBe(false);
-    expect(sessionStorage.getItem('sf2-tickets-access-token')).toBeNull();
+    expect(sessionStorage.getItem('loom-access-token')).toBeNull();
     expect(service.user()).toBeNull();
   });
 
   it('authHeaders() returns bearer header when token present, empty otherwise', () => {
     expect(service.authHeaders().get('Authorization')).toBeNull();
-    sessionStorage.setItem('sf2-tickets-access-token', 'token-abc');
+    sessionStorage.setItem('loom-access-token', 'token-abc');
     expect(service.authHeaders().get('Authorization')).toBe('Bearer token-abc');
   });
 });

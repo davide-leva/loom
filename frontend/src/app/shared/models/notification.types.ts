@@ -1,20 +1,20 @@
 // Notification domain types extracted from issue-notifications.service.ts.
 
-import type { IssueType } from './issue.types';
+import type { TipoSegnalazione } from './segnalazione.types';
 
-export interface UnreadIssueNotification {
+export interface SegnalazioneNonLetta {
   issueId: number;
-  issueType: IssueType | null;
+  issueType: TipoSegnalazione | null;
 }
 
-export interface IssueNotificationSummary {
+export interface RiepilogoNotificheSegnalazioni {
   projectId: number;
   total: number;
   planning: number;
   anomalies: number;
   improvements: number;
   implementations: number;
-  issues: UnreadIssueNotification[];
+  issues: SegnalazioneNonLetta[];
 }
 
-export type NotificationSection = 'PLANNING' | IssueType;
+export type SezioneNotifica = 'PLANNING' | TipoSegnalazione;

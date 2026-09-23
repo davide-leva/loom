@@ -71,7 +71,7 @@ export interface ProjectInput {
 export type FieldType = 'TEXT' | 'TEXTAREA' | 'NUMBER' | 'SELECT' | 'ATTACHMENTS';
 export type FieldScope = 'USER' | 'SUPERUSER' | 'TEAM';
 
-export interface IssueField {
+export interface SegnalazioneCampo {
   id: number;
   projectId: number;
   code: string;
@@ -83,7 +83,7 @@ export interface IssueField {
   scope: FieldScope;
 }
 
-export interface IssueFieldInput {
+export interface SegnalazioneCampoInput {
   projectId?: number;
   code: string;
   label: string;
@@ -94,7 +94,7 @@ export interface IssueFieldInput {
   scope: FieldScope;
 }
 
-export interface IssueFieldOption {
+export interface SegnalazioneCampoOpzione {
   id: number;
   definitionId: number;
   projectId: number;
@@ -103,7 +103,7 @@ export interface IssueFieldOption {
   active: boolean;
 }
 
-export interface IssueFieldOptionInput {
+export interface SegnalazioneCampoOpzioneInput {
   definitionId?: number;
   value: string;
   label: string;

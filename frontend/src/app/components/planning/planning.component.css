@@ -8,12 +8,12 @@ h1 { margin: 0; color: var(--p-primary-700); font-size: 24px; }
 .planning-column header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; color: var(--p-primary-700); font-weight: 800; }
 .cards { display: flex; flex-direction: column; gap: 10px; min-height: 360px; }
 .planning-card-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 10px; box-shadow: 0 8px 18px rgba(15, 71, 126, .07); cursor: grab; }
-.planning-card-item.internal-issue { background: var(--p-primary-50); }
+.planning-card-item.segnalazione-interna { background: var(--p-primary-50); }
 .planning-card-item:active { cursor: grabbing; }
-.planning-card-item.saving { opacity: .6; pointer-events: none; }
+.planning-card-item.salvataggio { opacity: .6; pointer-events: none; }
 .card-main { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #64748b; font-size: 12px; }
 .card-main strong { color: var(--p-primary-700); font-size: 14px; }
-.issue-unread-dot { display: inline-block; width: 9px; height: 9px; margin-left: 5px; border-radius: 50%; background: #dc2626; box-shadow: 0 0 0 3px #fee2e2; vertical-align: 1px; }
+.pallino-non-letto-segnalazione { display: inline-block; width: 9px; height: 9px; margin-left: 5px; border-radius: 50%; background: #dc2626; box-shadow: 0 0 0 3px #fee2e2; vertical-align: 1px; }
 h2 { margin: 8px 0 10px; color: #0f172a; font-size: 14px; line-height: 1.25; }
 .developer-select { display: flex; flex-direction: column; gap: 5px; color: #64748b; font-size: 12px; font-weight: 700; cursor: default; }
 .empty-column { border: 1px dashed #cbd5e1; border-radius: 14px; padding: 18px; text-align: center; color: #94a3b8; background: rgba(255,255,255,.7); }

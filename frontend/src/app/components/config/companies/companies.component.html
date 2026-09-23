@@ -159,7 +159,7 @@
           [closable]="!deletingUser" [closeOnEscape]="!deletingUser">
   @if (userToDelete) {
     <p>Vuoi eliminare l’utente <strong>{{ userToDelete.username }}</strong>?</p>
-    <p>Le sue appartenenze ai progetti e i riferimenti nelle issue e nei commenti saranno rimossi.</p>
+    <p>Le sue appartenenze ai progetti e i riferimenti nelle segnalazioni e nei commenti saranno rimossi.</p>
     @if (deleteUserError) { <p class="form-error" role="alert">{{ deleteUserError }}</p> }
     <div class="dialog-actions">
       <p-button label="Annulla" severity="secondary" [outlined]="true" [disabled]="deletingUser"

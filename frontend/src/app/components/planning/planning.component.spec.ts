@@ -4,22 +4,22 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { signal } from '@angular/core';
 import { Subject } from 'rxjs';
 import { PlanningComponent } from './planning.component';
-import { IssuesService } from '../../services/issues/issues.service';
+import { SegnalazioniService } from '../../services/segnalazioni/segnalazioni.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
-import { IssueNotificationsService } from '../../services/issue-notifications/issue-notifications.service';
-import type { IssueSummary, ProjectUserSummary } from '../../shared/models/issue.types';
+import { NotificheSegnalazioniService } from '../../services/notifiche-segnalazioni/notifiche-segnalazioni.service';
+import type { SegnalazioneSummary, ProjectUserSummary } from '../../shared/models/segnalazione.types';
 
-class IssuesStub {
-  issues$ = new Subject<IssueSummary[]>();
-  issues = jest.fn(() => this.issues$.asObservable());
+class SegnalazioniStub {
+  segnalazioni$ = new Subject<SegnalazioneSummary[]>();
+  segnalazioni = jest.fn(() => this.segnalazioni$.asObservable());
   projectUsers$ = new Subject<ProjectUserSummary[]>();
   projectUsers = jest.fn(() => this.projectUsers$.asObservable());
-  updatePlanning$ = new Subject<IssueSummary>();
-  updatePlanning = jest.fn(() => this.updatePlanning$.asObservable());
+  aggiornaPianificazione$ = new Subject<SegnalazioneSummary>();
+  aggiornaPianificazione = jest.fn(() => this.aggiornaPianificazione$.asObservable());
 }
 
-function issue(partial: Partial<IssueSummary>): IssueSummary {
+function segnalazione(partial: Partial<SegnalazioneSummary>): SegnalazioneSummary {
   return {
     id: 1, projectId: 1, title: 'T', description: 'D',
     createdAt: '2026-09-19T08:00:00.000Z',
@@ -31,14 +31,14 @@ function issue(partial: Partial<IssueSummary>): IssueSummary {
     internal: false, deletedAt: null, archivedAt: null,
     selectValues: {},
     ...partial
-  } as IssueSummary;
+  } as SegnalazioneSummary;
 }
 
 describe('PlanningComponent', () => {
   let fixture: ComponentFixture<PlanningComponent>;
   let component: PlanningComponent;
   let router: Router;
-  let issuesApi: IssuesStub;
+  let segnalazioniApi: SegnalazioniStub;
   let currentProjectIdSignal: ReturnType<typeof signal<number | null>>;
   let revisionSignal: ReturnType<typeof signal<number>>;
   let projectContext: { currentProjectId: () => number | null; currentProject: () => any };
@@ -46,7 +46,7 @@ describe('PlanningComponent', () => {
   let notifications: { isUnread: jest.Mock };
 
   beforeEach(async () => {
-    issuesApi = new IssuesStub();
+    segnalazioniApi = new SegnalazioniStub();
     currentProjectIdSignal = signal<number | null>(null);
     revisionSignal = signal(0);
     projectContext = {
@@ -61,10 +61,10 @@ describe('PlanningComponent', () => {
       providers: [
         provideRouter([]),
         provideAnimationsAsync('noop'),
-        { provide: IssuesService, useValue: issuesApi },
+        { provide: SegnalazioniService, useValue: segnalazioniApi },
         { provide: ProjectContextService, useValue: projectContext },
         { provide: LiveSyncService, useValue: liveSync },
-        { provide: IssueNotificationsService, useValue: notifications }
+        { provide: NotificheSegnalazioniService, useValue: notifications }
       ]
     }).compileComponents();
 
@@ -77,11 +77,11 @@ describe('PlanningComponent', () => {
     beforeEach(() => fixture.detectChanges());
 
     it('issuesFor() filters by status=REPORTED and column type, sorted by createdAt asc', () => {
-      component.issues.set([
-        issue({ id: 1, createdAt: '2026-09-19T10:00:00.000Z', issueType: 'ANOMALY' }),
-        issue({ id: 2, createdAt: '2026-09-19T08:00:00.000Z', issueType: 'ANOMALY' }),
-        issue({ id: 3, createdAt: '2026-09-19T09:00:00.000Z', issueType: 'ANOMALY', status: 'IN_PROGRESS' }),
-        issue({ id: 4, createdAt: '2026-09-19T11:00:00.000Z', issueType: 'IMPROVEMENT' })
+      component.segnalazioni.set([
+        segnalazione({ id: 1, createdAt: '2026-09-19T10:00:00.000Z', issueType: 'ANOMALY' }),
+        segnalazione({ id: 2, createdAt: '2026-09-19T08:00:00.000Z', issueType: 'ANOMALY' }),
+        segnalazione({ id: 3, createdAt: '2026-09-19T09:00:00.000Z', issueType: 'ANOMALY', status: 'IN_PROGRESS' }),
+        segnalazione({ id: 4, createdAt: '2026-09-19T11:00:00.000Z', issueType: 'IMPROVEMENT' })
       ]);
 
       const col = component.columns.find(c => c.type === 'ANOMALY')!;
@@ -90,9 +90,9 @@ describe('PlanningComponent', () => {
     });
 
     it('issuesFor() uncategorized column has issues with null type', () => {
-      component.issues.set([
-        issue({ id: 1, issueType: null }),
-        issue({ id: 2, issueType: 'ANOMALY' })
+      component.segnalazioni.set([
+        segnalazione({ id: 1, issueType: null }),
+        segnalazione({ id: 2, issueType: 'ANOMALY' })
       ]);
 
       const col = component.columns.find(c => c.type === null)!;
@@ -112,10 +112,10 @@ describe('PlanningComponent', () => {
         { id: 2, username: 'anna', firstName: null, lastName: null, role: 'USER' },
         { id: 3, username: 'admin', firstName: null, lastName: null, role: 'ADMIN' }
       ];
-      issuesApi.issues$.next([]);
-      issuesApi.issues$.complete();
-      issuesApi.projectUsers$.next(users);
-      issuesApi.projectUsers$.complete();
+      segnalazioniApi.segnalazioni$.next([]);
+      segnalazioniApi.segnalazioni$.complete();
+      segnalazioniApi.projectUsers$.next(users);
+      segnalazioniApi.projectUsers$.complete();
 
       expect(component.developerOptions[0]).toEqual({ label: 'Non assegnato', value: null });
       const labels = component.developerOptions.map(o => o.label);
@@ -130,44 +130,44 @@ describe('PlanningComponent', () => {
     beforeEach(() => fixture.detectChanges());
 
     it('does nothing when target column is uncategorized', () => {
-      component.startDrag(issue({ id: 1, issueType: null }));
+      component.startDrag(segnalazione({ id: 1, issueType: null }));
       const col = component.columns.find(c => c.type === null)!;
       component.dropOnColumn(col);
-      expect(issuesApi.updatePlanning).not.toHaveBeenCalled();
+      expect(segnalazioniApi.aggiornaPianificazione).not.toHaveBeenCalled();
     });
 
-    it('does nothing when issue type already matches the column', () => {
-      component.startDrag(issue({ id: 1, issueType: 'ANOMALY' }));
+    it('does nothing quando la segnalazione è gia nella colonna corretta', () => {
+      component.startDrag(segnalazione({ id: 1, issueType: 'ANOMALY' }));
       const col = component.columns.find(c => c.type === 'ANOMALY')!;
       component.dropOnColumn(col);
-      expect(issuesApi.updatePlanning).not.toHaveBeenCalled();
+      expect(segnalazioniApi.aggiornaPianificazione).not.toHaveBeenCalled();
     });
 
-    it('does nothing when there is no dragged issue', () => {
+    it('does nothing quando non c e una segnalazione trascinata', () => {
       const col = component.columns.find(c => c.type === 'ANOMALY')!;
       component.dropOnColumn(col);
-      expect(issuesApi.updatePlanning).not.toHaveBeenCalled();
+      expect(segnalazioniApi.aggiornaPianificazione).not.toHaveBeenCalled();
     });
 
-    it('calls updatePlanning with the new type on drop', () => {
-      component.issues.set([issue({ id: 1, issueType: null })]);
-      component.startDrag(issue({ id: 1, issueType: null, devUserId: null }));
+    it('calls aggiornaPianificazione with the new type on drop', () => {
+      component.segnalazioni.set([segnalazione({ id: 1, issueType: null })]);
+      component.startDrag(segnalazione({ id: 1, issueType: null, devUserId: null }));
       const col = component.columns.find(c => c.type === 'ANOMALY')!;
       component.dropOnColumn(col);
-      expect(issuesApi.updatePlanning).toHaveBeenCalledWith(1, 'ANOMALY', null);
-      expect(component.issues()[0].issueType).toBe('ANOMALY');
+      expect(segnalazioniApi.aggiornaPianificazione).toHaveBeenCalledWith(1, 'ANOMALY', null);
+      expect(component.segnalazioni()[0].issueType).toBe('ANOMALY');
 
-      issuesApi.updatePlanning$.next(issue({ id: 1, issueType: 'ANOMALY' }));
+      segnalazioniApi.aggiornaPianificazione$.next(segnalazione({ id: 1, issueType: 'ANOMALY' }));
       expect(component.savingIssueId()).toBeNull();
     });
 
-    it('reverts the issue on error', () => {
-      component.issues.set([issue({ id: 1, issueType: null, devUserId: null, devUsername: null })]);
-      component.startDrag(issue({ id: 1, issueType: null, devUserId: null }));
+    it('ripristina la segnalazione in caso di errore', () => {
+      component.segnalazioni.set([segnalazione({ id: 1, issueType: null, devUserId: null, devUsername: null })]);
+      component.startDrag(segnalazione({ id: 1, issueType: null, devUserId: null }));
       const col = component.columns.find(c => c.type === 'ANOMALY')!;
       component.dropOnColumn(col);
-      issuesApi.updatePlanning$.error(new Error('boom'));
-      expect(component.issues()[0].issueType).toBeNull();
+      segnalazioniApi.aggiornaPianificazione$.error(new Error('boom'));
+      expect(component.segnalazioni()[0].issueType).toBeNull();
       expect(component.error()).toBe('Non riesco a salvare la pianificazione.');
     });
   });
@@ -175,47 +175,47 @@ describe('PlanningComponent', () => {
   describe('setDeveloper()', () => {
     beforeEach(() => fixture.detectChanges());
 
-    it('updates optimistically when issue has no type yet', () => {
-      component.issues.set([issue({ id: 1, issueType: null, devUserId: null, devUsername: null })]);
+    it('updates optimistically quando la segnalazione non ha ancora una tipologia', () => {
+      component.segnalazioni.set([segnalazione({ id: 1, issueType: null, devUserId: null, devUsername: null })]);
       component.users.set([{ id: 5, username: 'team1', firstName: null, lastName: null, role: 'TEAM' }]);
-      component.setDeveloper(component.issues()[0], 5);
-      expect(issuesApi.updatePlanning).not.toHaveBeenCalled();
-      expect(component.issues()[0].devUserId).toBe(5);
+      component.setDeveloper(component.segnalazioni()[0], 5);
+      expect(segnalazioniApi.aggiornaPianificazione).not.toHaveBeenCalled();
+      expect(component.segnalazioni()[0].devUserId).toBe(5);
     });
 
     it('updates devUsername via savePlanning when type is set', () => {
-      component.issues.set([issue({ id: 1, issueType: 'ANOMALY', devUserId: null, devUsername: null })]);
+      component.segnalazioni.set([segnalazione({ id: 1, issueType: 'ANOMALY', devUserId: null, devUsername: null })]);
       component.users.set([{ id: 5, username: 'team1', firstName: null, lastName: null, role: 'TEAM' }]);
-      component.setDeveloper(component.issues()[0], 5);
-      expect(component.issues()[0].devUsername).toBe('team1');
+      component.setDeveloper(component.segnalazioni()[0], 5);
+      expect(component.segnalazioni()[0].devUsername).toBe('team1');
     });
 
-    it('persists via API when issue has a type', () => {
-      component.issues.set([issue({ id: 1, issueType: 'ANOMALY', devUserId: null, devUsername: null })]);
+    it('persists via API quando la segnalazione ha una tipologia', () => {
+      component.segnalazioni.set([segnalazione({ id: 1, issueType: 'ANOMALY', devUserId: null, devUsername: null })]);
       component.users.set([{ id: 5, username: 'team1', firstName: null, lastName: null, role: 'TEAM' }]);
-      component.setDeveloper(component.issues()[0], 5);
-      expect(issuesApi.updatePlanning).toHaveBeenCalledWith(1, 'ANOMALY', 5);
+      component.setDeveloper(component.segnalazioni()[0], 5);
+      expect(segnalazioniApi.aggiornaPianificazione).toHaveBeenCalledWith(1, 'ANOMALY', 5);
     });
   });
 
   describe('navigation', () => {
     beforeEach(() => fixture.detectChanges());
 
-    it('openDetail() sets selectedIssueId', () => {
-      component.openDetail({ id: 7 } as IssueSummary);
-      expect(component.selectedIssueId).toBe(7);
+    it('openDetail() sets segnalazioneSelezionataId', () => {
+      component.openDetail({ id: 7 } as SegnalazioneSummary);
+      expect(component.segnalazioneSelezionataId).toBe(7);
     });
 
-    it('onIssueChanged() replaces the matching issue', () => {
-      component.issues.set([issue({ id: 1 })]);
-      component.onIssueChanged(issue({ id: 1, title: 'updated' }));
-      expect(component.issues()[0].title).toBe('updated');
+    it('onSegnalazioneModificata() sostituisce la segnalazione corrispondente', () => {
+      component.segnalazioni.set([segnalazione({ id: 1 })]);
+      component.onSegnalazioneModificata(segnalazione({ id: 1, title: 'updated' }));
+      expect(component.segnalazioni()[0].title).toBe('updated');
     });
 
-    it('onIssueDeleted() removes the matching issue', () => {
-      component.issues.set([issue({ id: 1 }), issue({ id: 2 })]);
-      component.onIssueDeleted(1);
-      expect(component.issues().map(i => i.id)).toEqual([2]);
+    it('onSegnalazioneEliminata() rimuove la segnalazione corrispondente', () => {
+      component.segnalazioni.set([segnalazione({ id: 1 }), segnalazione({ id: 2 })]);
+      component.onSegnalazioneEliminata(1);
+      expect(component.segnalazioni().map(i => i.id)).toEqual([2]);
     });
   });
 });

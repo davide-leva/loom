@@ -1,4 +1,4 @@
-# SF2 Tickets
+# Loom
 
 Applicazione ticket completa con backend Spring Boot, frontend Angular, PostgreSQL, Flyway, autenticazione JWT, allegati su filesystem e notifiche email.
 
@@ -7,7 +7,7 @@ Applicazione ticket completa con backend Spring Boot, frontend Angular, PostgreS
 Su una macchina pulita con `curl`, `openssl` e `docker` (con il plugin `compose`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/davide-leva/ticket-platform/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/master/install.sh | bash
 ```
 
 Lo script scarica il minimo indispensabile (`compose.yml`, `.env.example`, `scripts/configure.sh`) e lancia `configure.sh`, che genera `.env` (mode `0600`) e `Caddyfile`. Al termine:
@@ -19,10 +19,10 @@ docker compose up -d
 Per skip-prompt interattivi (es. CI / provisioning automatico), passare `NONINTERACTIVE=1` davanti alla pipe:
 
 ```bash
-NONINTERACTIVE=1 curl -fsSL https://raw.githubusercontent.com/davide-leva/ticket-platform/master/install.sh | bash
+NONINTERACTIVE=1 curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/master/install.sh | bash
 ```
 
-Variabili accettate: `REPO` (default `davide-leva/ticket-platform`), `BRANCH` (default `master`), `DIR` (directory target, default cwd), `NONINTERACTIVE=1`.
+Variabili accettate: `REPO` (default `davide-leva/loom`), `BRANCH` (default `master`), `DIR` (directory target, default cwd), `NONINTERACTIVE=1`.
 
 ## Avvio rapido con Docker Compose
 
@@ -62,7 +62,7 @@ docker compose up -d
 Poi apri:
 
 - senza TLS: <http://localhost/>
-- con TLS: <https://tickets.example.com/> (sostituisci con il tuo dominio)
+- con TLS: <https://loom.example.com/> (sostituisci con il tuo dominio)
 
 Se le immagini GHCR sono private, prima fai login:
 
@@ -105,7 +105,7 @@ Entrambi i compose avviano quattro servizi:
 Disabilitato di default (HTTP puro su `http://localhost/`). Per abilitare Let's Encrypt:
 
 1. Punta un record DNS `A` (o `AAAA`) del tuo dominio verso l'IP pubblico del server.
-2. Verifica la propagazione: `dig +short tickets.example.com`.
+2. Verifica la propagazione: `dig +short loom.example.com`.
 3. Rilancia `./configure.sh` e rispondi `y` a "Enable TLS with Let's Encrypt?", quindi fornisci `DOMAIN` e `ACME_EMAIL`.
 4. Riavvia: `docker compose up -d`.
 
@@ -138,10 +138,10 @@ Lo script `backup.sh` crea un archivio `tar.gz` di `data/` + `.env` + `Caddyfile
 
 ```bash
 ./backup.sh
-# → backups/ticket-platform-2026-09-22T19-34-20Z.tar.gz
+# → backups/loom-2026-09-22T19-34-20Z.tar.gz
 
 ./backup.sh --label pre-migration
-# → backups/ticket-platform-2026-09-22T19-34-20Z-pre-migration.tar.gz
+# → backups/loom-2026-09-22T19-34-20Z-pre-migration.tar.gz
 
 BACKUP_DIR=/mnt/external ./backup.sh
 # → scrive su un mount esterno
@@ -150,10 +150,10 @@ BACKUP_DIR=/mnt/external ./backup.sh
 L'archivio viene creato con mode `0600` perché contiene `JWT_SECRET` e `DB_PASSWORD`. Per ripristinare:
 
 ```bash
-tar -xzf backups/ticket-platform-<timestamp>.tar.gz -C /restore/target
+tar -xzf backups/loom-<timestamp>.tar.gz -C /restore/target
 ```
 
-I path nell'archivio sono prefissati con `ticket-platform/` per evitare clash in caso di restore in una directory condivisa.
+I path nell'archivio sono prefissati con `loom/` per evitare clash in caso di restore in una directory condivisa.
 
 ## Pubblicazione immagini Docker
 
@@ -184,8 +184,8 @@ DB_PASSWORD=change-me-database-password
 
 JWT_SECRET=change-me-at-least-32-bytes-long-secret-value
 
-BACKEND_IMAGE=ghcr.io/your-org/sf2-tickets/backend:latest
-FRONTEND_IMAGE=ghcr.io/your-org/sf2-tickets/frontend:latest
+BACKEND_IMAGE=ghcr.io/your-org/loom/backend:latest
+FRONTEND_IMAGE=ghcr.io/your-org/loom/frontend:latest
 
 # TLS via Let's Encrypt (Caddy). Disabilitato di default.
 TLS_ENABLED=false
@@ -200,7 +200,7 @@ Notifiche email:
 
 ```env
 MAIL_NOTIFICATIONS_ENABLED=false
-MAIL_FROM=no-reply@tickets.local
+MAIL_FROM=no-reply@loom.local
 MAIL_NOTIFICATIONS_DELAY=5m
 SMTP_HOST=localhost
 SMTP_PORT=25

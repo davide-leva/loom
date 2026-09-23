@@ -59,7 +59,7 @@ if [[ "${ACTION}" == "stop" ]]; then
     pkill -f "mvn spring-boot:run" 2>/dev/null && echo "  ✓ stopped mvn spring-boot:run" || echo "  - mvn not running"
     pkill -f "ng serve"            2>/dev/null && echo "  ✓ stopped ng serve"            || echo "  - ng not running"
     sleep 1
-    pkill -9 -f "TicketsApplication"           2>/dev/null || true
+    pkill -9 -f "LoomApplication"              2>/dev/null || true
     pkill -9 -f "ng serve"                     2>/dev/null || true
     pkill -9 -f "@angular/cli"                 2>/dev/null || true
     docker compose -f "${COMPOSE_FILE}" stop database 2>/dev/null \
@@ -168,7 +168,7 @@ cleanup() {
     # Catch orphaned children that survived the parent (Spring Boot's JVM,
     # Angular CLI's node workers). Force-kill since the parents are gone.
     sleep 1
-    pkill -9 -f "TicketsApplication" 2>/dev/null || true
+    pkill -9 -f "LoomApplication"    2>/dev/null || true
     pkill -9 -f "ng serve"            2>/dev/null || true
     pkill -9 -f "@angular/cli"        2>/dev/null || true
     docker compose -f "${COMPOSE_FILE}" stop database >/dev/null 2>&1 || true

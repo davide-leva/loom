@@ -9,7 +9,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/master/install.sh | bash
 #
 # Environment overrides:
-#   REPO              owner/repo on GitHub (default: davide-leva/ticket-platform)
+#   REPO              owner/repo on GitHub (default: davide-leva/loom)
 #   BRANCH            git ref to fetch from   (default: master)
 #   DIR               target directory        (default: current directory)
 #   NONINTERACTIVE=1  pass --non-interactive to configure.sh
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-REPO="${REPO:-davide-leva/ticket-platform}"
+REPO="${REPO:-davide-leva/loom}"
 BRANCH="${BRANCH:-master}"
 DIR="${DIR:-$(pwd)}"
 RAW="https://raw.githubusercontent.com/${REPO}/${BRANCH}"

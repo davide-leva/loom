@@ -1,4 +1,4 @@
-# Casi d'uso — SF2 Tickets
+# Casi d'uso — Loom
 
 > Documento di riferimento per i test E2E. Ogni caso d'uso elenca attore, precondizioni, flusso principale, flussi alternativi ed esito atteso. Le regole di accesso per ruolo sono consolidate nella sezione finale **Matrice di autorizzazione**.
 
@@ -153,7 +153,7 @@ REPORTED → IN_PROGRESS → COMPLETED → RELEASED → APPROVED → (ARCHIVED, 
 ### 3.6 Pubblicazione del branding interno (pagina login)
 
 - **Endpoint**: `GET /api/branding/internal` (pubblico).
-- **Risposta**: `{ name, primaryColor, logoUrl }` dell'azienda interna, oppure defaults `{ name: "Tickets", primaryColor: "blue", logoUrl: null }` se non esiste ancora.
+- **Risposta**: `{ name, primaryColor, logoUrl }` dell'azienda interna, oppure defaults `{ name: "Loom", primaryColor: "blue", logoUrl: null }` se non esiste ancora.
 - La pagina di login la consuma prima dell'autenticazione per personalizzare la UI.
 
 ---
@@ -241,7 +241,7 @@ Riapertura della URL `?t=…` con token aggiornato → ripete 4.7.
 ### 5.3 Upload logo (azienda o progetto)
 
 - **Trigger**: setup iniziale, `createCompany`, `updateCompany`, `createProject`, `updateProject`.
-- **Validazioni comuni** ([BrandingService](backend/src/main/java/it/sf2/tickets/controller/BrandingService.java)):
+- **Validazioni comuni** ([BrandingService](backend/src/main/java/it/davideleva/loom/controller/BrandingService.java)):
   - ≤ 2 MB.
   - Estensione ∈ PNG, JPG, JPEG, WebP, SVG.
   - Magic bytes coerenti con l'estensione.

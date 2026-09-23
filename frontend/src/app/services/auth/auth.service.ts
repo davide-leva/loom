@@ -6,7 +6,7 @@ import type { CurrentUser, ExternalLoginResponse, LoginResponse, ProjectSummary 
 
 export type { CurrentUser, ProjectSummary };
 
-const TOKEN_KEY = 'sf2-tickets-access-token';
+const TOKEN_KEY = 'loom-access-token';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {

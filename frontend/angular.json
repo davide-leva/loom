@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "sf2-tickets": {
+    "loom": {
       "projectType": "application",
       "root": "",
       "sourceRoot": "src",
@@ -12,7 +12,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
-            "outputPath": "dist/sf2-tickets",
+            "outputPath": "dist/loom",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "polyfills": ["zone.js"],
@@ -40,8 +40,8 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": { "proxyConfig": "proxy.conf.json" },
           "configurations": {
-            "production": { "buildTarget": "sf2-tickets:build:production" },
-            "development": { "buildTarget": "sf2-tickets:build:development" }
+            "production": { "buildTarget": "loom:build:production" },
+            "development": { "buildTarget": "loom:build:development" }
           },
           "defaultConfiguration": "development"
         }

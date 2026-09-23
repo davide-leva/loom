@@ -145,7 +145,7 @@ echo "  ✓ generated 48-byte JWT_SECRET"
 echo
 echo "→ Email notifications"
 MAIL_NOTIFICATIONS_ENABLED="$(prompt "Enable email notifications?" "${DEFAULT[MAIL_NOTIFICATIONS_ENABLED]:-false}")"
-MAIL_FROM="$(prompt "MAIL_FROM" "${DEFAULT[MAIL_FROM]:-no-reply@tickets.local}")"
+MAIL_FROM="$(prompt "MAIL_FROM" "${DEFAULT[MAIL_FROM]:-no-reply@loom.local}")"
 
 SMTP_HOST="${DEFAULT[SMTP_HOST]:-localhost}"
 SMTP_PORT="${DEFAULT[SMTP_PORT]:-25}"
@@ -177,7 +177,7 @@ ACME_EMAIL="${DEFAULT[ACME_EMAIL]:-}"
 
 if [[ "${TLS_ENABLED}" =~ ^[Yy]|[Tt][Rr][Uu][Ee]|1$ ]]; then
     while [[ -z "${DOMAIN}" ]]; do
-        DOMAIN="$(prompt "DOMAIN (e.g. tickets.example.com)" "")"
+        DOMAIN="$(prompt "DOMAIN (e.g. loom.example.com)" "")"
         [[ -z "${DOMAIN}" ]] && echo "  DOMAIN is required when TLS is enabled." || true
     done
     while [[ -z "${ACME_EMAIL}" ]]; do
@@ -189,8 +189,8 @@ fi
 # --- optional overrides ------------------------------------------------------
 echo
 echo "→ Optional overrides (Enter keeps the .env.example default)"
-DB_NAME="$(prompt "DB_NAME" "${DEFAULT[DB_NAME]:-tickets}")"
-DB_USER="$(prompt "DB_USER" "${DEFAULT[DB_USER]:-dbatickets}")"
+DB_NAME="$(prompt "DB_NAME" "${DEFAULT[DB_NAME]:-loom}")"
+DB_USER="$(prompt "DB_USER" "${DEFAULT[DB_USER]:-dbaloom}")"
 ATTACHMENTS_MAX_FILE_SIZE="$(prompt "ATTACHMENTS_MAX_FILE_SIZE" "${DEFAULT[ATTACHMENTS_MAX_FILE_SIZE]:-25MB}")"
 ATTACHMENTS_MAX_REQUEST_SIZE="$(prompt "ATTACHMENTS_MAX_REQUEST_SIZE" "${DEFAULT[ATTACHMENTS_MAX_REQUEST_SIZE]:-25M}")"
 
@@ -205,8 +205,8 @@ DB_PASSWORD=${DB_PASSWORD}
 
 JWT_SECRET=${JWT_SECRET}
 
-BACKEND_IMAGE=${DEFAULT[BACKEND_IMAGE]:-ghcr.io/your-org/sf2-tickets/backend:latest}
-FRONTEND_IMAGE=${DEFAULT[FRONTEND_IMAGE]:-ghcr.io/your-org/sf2-tickets/frontend:latest}
+BACKEND_IMAGE=${DEFAULT[BACKEND_IMAGE]:-ghcr.io/your-org/loom/backend:latest}
+FRONTEND_IMAGE=${DEFAULT[FRONTEND_IMAGE]:-ghcr.io/your-org/loom/frontend:latest}
 
 # TLS via Let's Encrypt (Caddy). Set true once DNS points to this host.
 TLS_ENABLED=${TLS_ENABLED}

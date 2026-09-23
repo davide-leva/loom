@@ -5,7 +5,7 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
 import { SelectModule } from 'primeng/select';
-import { IssueDetailDialogComponent } from '../issue-detail-dialog/issue-detail-dialog.component';
+import { SegnalazioneDetailDialogComponent } from '../segnalazione-detail-dialog/segnalazione-detail-dialog.component';
 import { EventActor, EventType, EventsService, WorkspaceEvent } from '../../services/events/events.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
@@ -26,7 +26,7 @@ const labels: Record<EventType, string> = {
 
 @Component({
   selector: 'app-events',
-  imports: [DatePipe, FormsModule, ButtonModule, CardModule, DatePickerModule, SelectModule, IssueDetailDialogComponent],
+  imports: [DatePipe, FormsModule, ButtonModule, CardModule, DatePickerModule, SelectModule, SegnalazioneDetailDialogComponent],
   template: `
     <p-card>
       <div class="page-title">
@@ -62,17 +62,17 @@ const labels: Record<EventType, string> = {
         @if (error()) { <p class="error-message">{{ error() }}</p> }
         <div class="events-list" aria-live="polite">
           @for (event of items(); track event.id) {
-            <article class="event-row" [class.internal-issue]="event.internal">
+            <article class="event-row" [class.segnalazione-interna]="event.internal">
               <div class="event-icon"><i [class]="icon(event.type)" aria-hidden="true"></i></div>
               <div class="event-body">
                 <strong><span class="event-actor">{{ event.actorUsername || 'Sistema' }}</span> · {{ labels[event.type] }}</strong>
-                <div class="issue-title">
+                <div class="titolo-segnalazione">
                   @if (event.issueId && event.type !== 'ISSUE_DELETED') {
-                    <button type="button" class="issue-link" (click)="selectedIssueId = event.issueId">#{{ event.issueId }}</button>
+                    <button type="button" class="link-segnalazione" (click)="segnalazioneSelezionataId = event.issueId">#{{ event.issueId }}</button>
                   } @else if (event.issueId) {
-                    <span class="issue-reference">#{{ event.issueId }}</span>
+                    <span class="riferimento-segnalazione">#{{ event.issueId }}</span>
                   }
-                  @if (event.issueTitle) { <span class="event-issue-title">{{ event.issueTitle }}</span> }
+                  @if (event.issueTitle) { <span class="event-segnalazione-titolo">{{ event.issueTitle }}</span> }
                 </div>
                 <p class="event-details">{{ event.data }}</p>
                 <small>{{ event.eventDate | date:'dd/MM/yyyy HH:mm:ss' }}</small>
@@ -92,8 +92,8 @@ const labels: Record<EventType, string> = {
           </div>
         }
       }
-      @if (selectedIssueId !== null) {
-        <app-issue-detail-dialog [issueId]="selectedIssueId" (closed)="selectedIssueId = null" />
+      @if (segnalazioneSelezionataId !== null) {
+        <app-segnalazione-detail-dialog [issueId]="segnalazioneSelezionataId" (closed)="segnalazioneSelezionataId = null" />
       }
     </p-card>
   `,
@@ -112,7 +112,7 @@ export class EventsComponent {
   readonly page = signal(0);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
-  selectedIssueId: number | null = null;
+  segnalazioneSelezionataId: number | null = null;
   type: EventType | null = null;
   actorId: number | null = null;
   dateRange: Date[] | null = null;

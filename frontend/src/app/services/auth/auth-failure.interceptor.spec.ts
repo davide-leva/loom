@@ -34,7 +34,7 @@ describe('authFailureInterceptor', () => {
   it('logs out and redirects when 401 arrives with matching Authorization header', () => {
     const logoutSpy = jest.spyOn(auth, 'logout');
     const navigateSpy = jest.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
-    sessionStorage.setItem('sf2-tickets-access-token', 'token-1');
+    sessionStorage.setItem('loom-access-token', 'token-1');
     httpClient.get('/api/things', { headers: auth.authHeaders() }).subscribe({ error: () => undefined });
     http.expectOne('/api/things')
       .flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
@@ -54,9 +54,9 @@ describe('authFailureInterceptor', () => {
 
   it('does not trigger logout when 401 has stale Authorization header', () => {
     const logoutSpy = jest.spyOn(auth, 'logout');
-    sessionStorage.setItem('sf2-tickets-access-token', 'token-current');
+    sessionStorage.setItem('loom-access-token', 'token-current');
     const stale = auth.authHeaders();
-    sessionStorage.setItem('sf2-tickets-access-token', 'token-new');
+    sessionStorage.setItem('loom-access-token', 'token-new');
     httpClient.get('/api/things', { headers: stale }).subscribe({ error: () => undefined });
     http.expectOne('/api/things')
       .flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
@@ -74,7 +74,7 @@ describe('authFailureInterceptor', () => {
 
   it('passes 500 errors through without logout', () => {
     const logoutSpy = jest.spyOn(auth, 'logout');
-    sessionStorage.setItem('sf2-tickets-access-token', 'token-1');
+    sessionStorage.setItem('loom-access-token', 'token-1');
     httpClient.get('/api/things', { headers: auth.authHeaders() }).subscribe({ error: () => undefined });
     http.expectOne('/api/things').flush('Boom', { status: 500, statusText: 'Server Error' });
     expect(logoutSpy).not.toHaveBeenCalled();

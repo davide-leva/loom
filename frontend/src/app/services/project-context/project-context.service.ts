@@ -66,7 +66,7 @@ export class ProjectContextService {
   }
 
   private cookieName(): string {
-    return `sf2-current-project-${this.auth.user()?.id ?? 'anonymous'}`;
+    return `loom-current-project-${this.auth.user()?.id ?? 'anonymous'}`;
   }
 
   private readCookie(): string | null {
