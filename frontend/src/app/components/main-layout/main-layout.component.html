@@ -20,9 +20,6 @@
 
     <nav class="main-nav" aria-label="Navigazione principale">
       <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><i class="pi pi-chart-bar" aria-hidden="true"></i>Dashboard</a>
-      @if (auth.user()?.role === 'ADMIN' || auth.user()?.role === 'TEAM') {
-        <a routerLink="/eventi" routerLinkActive="active"><i class="pi pi-history" aria-hidden="true"></i>Eventi</a>
-      }
       @if (auth.user()?.role === 'ADMIN') {
         <a routerLink="/pianificazione" routerLinkActive="active"><i class="pi pi-calendar" aria-hidden="true"></i>Pianificazione
           @if (notifications.planningCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
@@ -37,6 +34,9 @@
       <a routerLink="/implementazioni" routerLinkActive="active"><i class="pi pi-code" aria-hidden="true"></i>Implementazioni
         @if (notifications.implementationsCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
       </a>
+      @if (auth.user()?.role === 'ADMIN' || auth.user()?.role === 'TEAM') {
+        <a routerLink="/eventi" routerLinkActive="active"><i class="pi pi-history" aria-hidden="true"></i>Eventi</a>
+      }
       @if (auth.user()?.role === 'ADMIN') {
         <a routerLink="/configurazione" routerLinkActive="active"><i class="pi pi-cog" aria-hidden="true"></i>Configurazione</a>
       }
