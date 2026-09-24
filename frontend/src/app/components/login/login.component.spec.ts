@@ -94,12 +94,14 @@ describe('LoginComponent', () => {
     queryParamMap = {};
     fixture.detectChanges();
     flushBranding();
+    fixture.detectChanges();
   }
 
   function setupExternal(): void {
     queryParamMap = { t: 'external-token' };
     fixture.detectChanges();
     flushBranding();
+    fixture.detectChanges();
   }
 
   describe('basic login', () => {
@@ -149,6 +151,20 @@ describe('LoginComponent', () => {
       component.login();
 
       expect(auth.login).not.toHaveBeenCalled();
+    });
+
+    it('shows the internal company logo when branding provides one', () => {
+      queryParamMap = {};
+      fixture.detectChanges();
+
+      const req = http.expectOne('/api/branding/internal');
+      req.flush({ name: 'Acme Team', primaryColor: 'emerald', logoUrl: '/api/branding/companies/1/logo' });
+      fixture.detectChanges();
+
+      const logo = fixture.nativeElement.querySelector('.internal-logo') as HTMLImageElement | null;
+      expect(logo).not.toBeNull();
+      expect(logo?.getAttribute('src')).toBe('/api/branding/companies/1/logo');
+      expect(logo?.getAttribute('alt')).toBe('Logo Acme Team');
     });
   });
 

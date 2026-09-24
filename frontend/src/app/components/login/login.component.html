@@ -1,7 +1,12 @@
 <main class="login-page">
   <div class="login-content">
     <div class="brand">
-      <img class="brand-logotype" [src]="loomLogotypeUrl" alt="Loom" />
+      <div class="brand-row">
+        @if (internalBrand.logoUrl; as logoUrl) {
+          <img class="internal-logo" [src]="logoUrl" [alt]="'Logo ' + internalBrand.name" />
+        }
+        <img class="brand-logotype" [src]="loomLogotypeUrl" alt="Loom" />
+      </div>
     </div>
 
     <p-card styleClass="login-card">
