@@ -7,14 +7,17 @@
 #   ./scripts/bump.sh minor --no-commit       # only rewrite VERSION
 #   ./scripts/bump.sh major --commit          # rewrite VERSION and commit
 #
-# Reads VERSION at the repo root, applies the bump, writes it back, and
-# optionally creates a single commit titled "release: bump <new>".
+# Reads VERSION at the repo root, applies the bump, syncs backend/frontend
+# manifests, and optionally creates a single commit titled "release: bump <new>".
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VERSION_FILE="${REPO_ROOT}/VERSION"
+BACKEND_POM="${REPO_ROOT}/backend/pom.xml"
+FRONTEND_PACKAGE="${REPO_ROOT}/frontend/package.json"
+FRONTEND_LOCK="${REPO_ROOT}/frontend/package-lock.json"
 
 PART=""
 COMMIT=""
@@ -63,6 +66,34 @@ bumped_version() {
     printf '%s.%s.%s\n' "${major}" "${minor}" "${patch}"
 }
 
+sync_manifest_versions() {
+    local version="$1"
+    local backend_version="${version}-SNAPSHOT"
+
+    if [[ -f "${BACKEND_POM}" ]]; then
+        perl -0pi -e 's|(<artifactId>loom</artifactId>\s*)<version>[^<]+</version>|$1<version>'"${backend_version}"'</version>|s' "${BACKEND_POM}"
+    fi
+
+    for json_file in "${FRONTEND_PACKAGE}" "${FRONTEND_LOCK}"; do
+        if [[ -f "${json_file}" ]]; then
+            command -v node >/dev/null 2>&1 || { echo "node is required to update ${json_file}" >&2; exit 1; }
+            LOOM_NEW_VERSION="${version}" node -e '
+const fs = require("node:fs");
+const file = process.argv[1];
+const nextVersion = process.env.LOOM_NEW_VERSION;
+const data = JSON.parse(fs.readFileSync(file, "utf8"));
+
+data.version = nextVersion;
+if (data.packages && data.packages[""]) {
+  data.packages[""].version = nextVersion;
+}
+
+fs.writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
+' "${json_file}"
+        fi
+    done
+}
+
 prompt_part() {
     local reply
     echo "Versione corrente: ${CURRENT}" >&2
@@ -106,6 +137,7 @@ fi
 NEW="$(bumped_version "${PART}" "${MAJOR}" "${MINOR}" "${PATCH}")"
 
 printf '%s\n' "${NEW}" > "${VERSION_FILE}"
+sync_manifest_versions "${NEW}"
 
 OLD_PRETTY=$(git -C "${REPO_ROOT}" describe --tags --dirty 2>/dev/null || echo "(none)")
 echo "VERSION: ${CURRENT} -> ${NEW}  (last tag: ${OLD_PRETTY})"
@@ -120,6 +152,6 @@ fi
 
 if [[ "${COMMIT}" -eq 1 ]]; then
     cd "${REPO_ROOT}"
-    git commit -m "release: bump ${NEW}" -- VERSION
+    git commit -m "release: bump ${NEW}" -- VERSION backend/pom.xml frontend/package.json frontend/package-lock.json
     echo "  committed."
 fi
