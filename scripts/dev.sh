@@ -2,8 +2,9 @@
 # dev.sh — local development with hot reload.
 #
 # Starts the database via compose, then runs the backend (Spring Boot) and
-# frontend (Angular dev server) locally for hot reload. Sources `.env` from
-# the repo root.
+# frontend (Angular dev server) locally for hot reload. With --compose, builds
+# and runs the full single-image stack through compose.dev.yml instead.
+# Sources `.env` from the repo root.
 #
 # Data lives in ./data/{db,attachments,branding,caddy*} as bind mounts and
 # persists across runs. Use --fresh to wipe db/attachments/branding before
@@ -14,6 +15,7 @@
 #   ./scripts/dev.sh --detach  # run in background, return immediately
 #   ./scripts/dev.sh --stop    # kill any prior dev processes and the database
 #   ./scripts/dev.sh --fresh   # wipe ./data/{db,attachments,branding} then start
+#   ./scripts/dev.sh --compose # build and run the full Docker stack
 #   ./scripts/dev.sh --help
 
 set -euo pipefail
@@ -22,6 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
 COMPOSE_FILE="${COMPOSE_FILE:-${REPO_ROOT}/compose.yml}"
+COMPOSE_DEV_FILE="${COMPOSE_DEV_FILE:-${REPO_ROOT}/compose.dev.yml}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/.dev-logs}"
 
 usage() {
@@ -31,11 +34,13 @@ usage() {
 DETACH=0
 ACTION="up"
 FRESH=0
+COMPOSE_MODE=0
 for arg in "$@"; do
     case "${arg}" in
         --detach|-d) DETACH=1 ;;
         --stop)      ACTION="stop" ;;
         --fresh)     FRESH=1 ;;
+        --compose)   COMPOSE_MODE=1 ;;
         --help|-h)   usage; exit 0 ;;
         *) echo "Unknown argument: ${arg}" >&2; usage >&2; exit 1 ;;
     esac
@@ -65,17 +70,27 @@ if [[ "${ACTION}" == "stop" ]]; then
     docker compose -f "${COMPOSE_FILE}" stop database 2>/dev/null \
         && echo "  ✓ stopped database container" \
         || echo "  - database not running"
+    if [[ "${COMPOSE_MODE}" -eq 1 ]]; then
+        docker compose -f "${COMPOSE_DEV_FILE}" down 2>/dev/null \
+            && echo "  ✓ stopped compose dev stack" \
+            || echo "  - compose dev stack not running"
+    fi
     exit 0
 fi
 
 # --- pre-flight --------------------------------------------------------------
 command -v docker >/dev/null 2>&1 || { echo "docker is required" >&2; exit 1; }
-command -v mvn    >/dev/null 2>&1 || { echo "mvn (Maven) is required" >&2; exit 1; }
-command -v npm    >/dev/null 2>&1 || { echo "npm is required" >&2; exit 1; }
+if [[ "${COMPOSE_MODE}" -eq 0 ]]; then
+    command -v mvn >/dev/null 2>&1 || { echo "mvn (Maven) is required" >&2; exit 1; }
+    command -v npm >/dev/null 2>&1 || { echo "npm is required" >&2; exit 1; }
+fi
 [[ -f "${ENV_FILE}" ]] || {
     echo "${ENV_FILE} not found. Run ./configure.sh first." >&2
     exit 1
 }
+if [[ "${COMPOSE_MODE}" -eq 1 ]]; then
+    [[ -f "${COMPOSE_DEV_FILE}" ]] || { echo "${COMPOSE_DEV_FILE} not found" >&2; exit 1; }
+fi
 [[ -d "${REPO_ROOT}/backend"  ]] || { echo "backend/ not found" >&2; exit 1; }
 [[ -d "${REPO_ROOT}/frontend" ]] || { echo "frontend/ not found" >&2; exit 1; }
 
@@ -84,7 +99,11 @@ mkdir -p "${LOG_DIR}"
 # --- 0b. optional: wipe persisted data --------------------------------------
 if [[ "${FRESH}" -eq 1 ]]; then
     echo "→ --fresh: wiping ./data/{db,attachments,branding}"
-    docker compose -f "${COMPOSE_FILE}" stop database >/dev/null 2>&1 || true
+    if [[ "${COMPOSE_MODE}" -eq 1 ]]; then
+        docker compose -f "${COMPOSE_DEV_FILE}" down >/dev/null 2>&1 || true
+    else
+        docker compose -f "${COMPOSE_FILE}" stop database >/dev/null 2>&1 || true
+    fi
     for sub in db attachments branding; do
         if [[ -d "${REPO_ROOT}/data/${sub}" ]]; then
             rm -rf "${REPO_ROOT}/data/${sub}"
@@ -93,6 +112,32 @@ if [[ "${FRESH}" -eq 1 ]]; then
         mkdir -p "${REPO_ROOT}/data/${sub}"
     done
     echo "  (data/caddy* left intact — TLS certs and proxy config preserved)"
+fi
+
+# --- compose mode ------------------------------------------------------------
+if [[ "${COMPOSE_MODE}" -eq 1 ]]; then
+    APP_VERSION="${APP_VERSION:-dev}"
+    APP_COMMIT="$(git -C "${REPO_ROOT}" rev-parse --short=8 HEAD 2>/dev/null || echo "local")"
+    APP_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "local")"
+    APP_ENV="${APP_ENV:-dev}"
+    export APP_VERSION APP_COMMIT APP_BUILD_TIME APP_ENV
+
+    echo "→ Build metadata: ${APP_VERSION} · ${APP_COMMIT} · ${APP_BUILD_TIME} (env: ${APP_ENV})"
+    echo "→ Starting compose dev stack"
+    if [[ "${DETACH}" -eq 1 ]]; then
+        docker compose -f "${COMPOSE_DEV_FILE}" up -d --build
+        echo
+        echo "Compose dev stack is running."
+        echo "URL: http://localhost/"
+        echo "Logs: docker compose -f ${COMPOSE_DEV_FILE} logs -f"
+        echo "Stop: ./scripts/dev.sh --compose --stop"
+        exit 0
+    fi
+
+    echo "URL: http://localhost/"
+    echo "→ Running in foreground (Ctrl+C to stop)"
+    docker compose -f "${COMPOSE_DEV_FILE}" up --build
+    exit 0
 fi
 
 # --- 1. database via compose ------------------------------------------------

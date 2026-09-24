@@ -9,11 +9,6 @@ services:
       POSTGRES_USER: ${DB_USER:-dbaloom}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: ${DB_NAME:-loom}
-    # Bound to loopback so backend running on the host (./scripts/dev.sh)
-    # can reach it via localhost:5432. Still unreachable from outside the host.
-    # Docker-network traffic between backend/database containers uses the
-    # internal DNS hostname "database", so this mapping is unused in the
-    # full compose stack.
     ports:
       - "127.0.0.1:5432:5432"
     expose:
@@ -27,7 +22,14 @@ services:
       retries: 10
 
   loom:
-    image: ${LOOM_IMAGE:-loom:latest}
+    image: loom:dev
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        VERSION: ${APP_VERSION:-dev}
+        COMMIT: ${APP_COMMIT:-local}
+        BUILD_TIME: ${APP_BUILD_TIME:-local}
     container_name: loom
     restart: unless-stopped
     env_file:
@@ -53,6 +55,10 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_AUTH: ${SMTP_AUTH:-false}
       SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLE:-false}
+      APP_VERSION: ${APP_VERSION:-dev}
+      APP_COMMIT: ${APP_COMMIT:-local}
+      APP_BUILD_TIME: ${APP_BUILD_TIME:-local}
+      APP_ENV: ${APP_ENV:-dev}
     expose:
       - "8080"
     volumes:

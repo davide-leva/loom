@@ -14,18 +14,8 @@ permissions:
 
 jobs:
   build-and-push:
-    name: Build and push ${{ matrix.image.name }}
+    name: Build and push loom
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - name: backend
-            dockerfile: backend/Dockerfile
-            context: .
-          - name: frontend
-            dockerfile: frontend/Dockerfile
-            context: ./frontend
 
     steps:
       - name: Checkout
@@ -35,7 +25,7 @@ jobs:
         id: image
         shell: bash
         run: |
-          echo "namespace=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "namespace=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -66,7 +56,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.image.outputs.namespace }}/${{ matrix.image.name }}
+          images: ${{ steps.image.outputs.namespace }}/loom
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -77,8 +67,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.image.context }}
-          file: ${{ matrix.image.dockerfile }}
+          context: .
+          file: backend/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -87,5 +77,5 @@ jobs:
             VERSION=${{ steps.version.outputs.value }}
             COMMIT=${{ github.sha }}
             BUILD_TIME=${{ steps.version.outputs.build_time }}
-          cache-from: type=gha,scope=${{ matrix.image.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image.name }}
+          cache-from: type=gha,scope=loom
+          cache-to: type=gha,mode=max,scope=loom

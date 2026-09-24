@@ -39,6 +39,7 @@ REPO_ROOT="${REPO_ROOT:-$(find_repo_root)}"
 ENV_FILE="${ENV_FILE:-${REPO_ROOT}/.env}"
 ENV_EXAMPLE="${ENV_EXAMPLE:-${REPO_ROOT}/.env.example}"
 CADDYFILE="${CADDYFILE:-${REPO_ROOT}/Caddyfile}"
+PROMPT_FD=0
 
 usage() {
     sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -54,6 +55,11 @@ for arg in "$@"; do
         *) echo "Unknown argument: ${arg}" >&2; usage >&2; exit 1 ;;
     esac
 done
+
+if [[ "${NON_INTERACTIVE}" -eq 0 && ! -t 0 && -r /dev/tty ]]; then
+    exec 3</dev/tty
+    PROMPT_FD=3
+fi
 
 command -v openssl >/dev/null 2>&1 || { echo "openssl is required" >&2; exit 1; }
 [[ -f "${ENV_EXAMPLE}" ]] || { echo "${ENV_EXAMPLE} not found" >&2; exit 1; }
@@ -79,13 +85,13 @@ if [[ -f "${ENV_FILE}" ]]; then
             echo "${ENV_FILE} already exists; refusing to overwrite without --force" >&2
             exit 1
         fi
-        read -rp ".env already exists. Overwrite? [y/N] " ans
+        read -r -u "${PROMPT_FD}" -p ".env already exists. Overwrite? [y/N] " ans
         [[ "${ans}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
     fi
     cp "${ENV_FILE}" "${ENV_FILE}.bak.$(date +%Y%m%d-%H%M%S)"
 fi
 if [[ -f "${CADDYFILE}" && "${FORCE}" -eq 0 && "${NON_INTERACTIVE}" -eq 0 ]]; then
-    read -rp "Caddyfile already exists. Overwrite? [y/N] " ans
+    read -r -u "${PROMPT_FD}" -p "Caddyfile already exists. Overwrite? [y/N] " ans
     [[ "${ans}" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 0; }
 fi
 
@@ -97,9 +103,9 @@ prompt() {
         return
     fi
     if [[ -n "${default}" ]]; then
-        read -rp "${label} [${default}]: " reply
+        read -r -u "${PROMPT_FD}" -p "${label} [${default}]: " reply
     else
-        read -rp "${label}: " reply
+        read -r -u "${PROMPT_FD}" -p "${label}: " reply
     fi
     echo "${reply:-${default}}"
 }
@@ -111,10 +117,10 @@ prompt_secret() {
         return
     fi
     if [[ -n "${default}" ]]; then
-        read -rsp "${label} [leave empty to keep]: " reply
+        read -r -s -u "${PROMPT_FD}" -p "${label} [leave empty to keep]: " reply
         echo
     else
-        read -rsp "${label} (input hidden): " reply
+        read -r -s -u "${PROMPT_FD}" -p "${label} (input hidden): " reply
         echo
     fi
     echo "${reply:-${default}}"
@@ -140,6 +146,7 @@ echo
 echo "→ JWT secret"
 JWT_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
 echo "  ✓ generated 48-byte JWT_SECRET"
+JWT_TTL_MINUTES="$(prompt "JWT_TTL_MINUTES" "${DEFAULT[JWT_TTL_MINUTES]:-480}")"
 
 # --- mail --------------------------------------------------------------------
 echo
@@ -167,7 +174,7 @@ fi
 
 # --- TLS ---------------------------------------------------------------------
 echo
-echo "→ TLS (Caddy in front of the frontend)"
+echo "→ TLS (Caddy in front of Loom)"
 echo "  Let's Encrypt requires a public DNS A/AAAA record pointing to this host."
 echo "  Leave disabled for plain HTTP on :80 (local dev, LAN behind another proxy)."
 TLS_ENABLED="$(prompt "Enable TLS with Let's Encrypt?" "${DEFAULT[TLS_ENABLED]:-false}")"
@@ -204,9 +211,9 @@ DB_USER=${DB_USER}
 DB_PASSWORD=${DB_PASSWORD}
 
 JWT_SECRET=${JWT_SECRET}
+JWT_TTL_MINUTES=${JWT_TTL_MINUTES}
 
-BACKEND_IMAGE=${DEFAULT[BACKEND_IMAGE]:-ghcr.io/your-org/loom/backend:latest}
-FRONTEND_IMAGE=${DEFAULT[FRONTEND_IMAGE]:-ghcr.io/your-org/loom/frontend:latest}
+LOOM_IMAGE=${DEFAULT[LOOM_IMAGE]:-loom:latest}
 
 # TLS via Let's Encrypt (Caddy). Set true once DNS points to this host.
 TLS_ENABLED=${TLS_ENABLED}
@@ -230,32 +237,6 @@ EOF
 
 chmod 600 "${ENV_FILE}"
 
-# --- generate internal TLS cert for nginx (hop Caddy → nginx) ----------------
-# Caddy proxies to nginx over HTTPS with a self-signed cert so the
-# Caddy → nginx hop is never in plaintext. The cert is mounted into the
-# nginx container at /etc/nginx/ssl/nginx.{crt,key} (see compose.yml).
-# Only Caddy talks to nginx, so we trust the cert via
-# `tls_insecure_skip_verify` in the Caddyfile.
-NGINX_CERT_DIR="${REPO_ROOT}/data/caddy"
-NGINX_CERT_FILE="${NGINX_CERT_DIR}/nginx-selfsigned.crt"
-NGINX_KEY_FILE="${NGINX_CERT_DIR}/nginx-selfsigned.key"
-
-mkdir -p "${NGINX_CERT_DIR}"
-chmod 700 "${NGINX_CERT_DIR}"
-
-if [[ ! -f "${NGINX_CERT_FILE}" || ! -f "${NGINX_KEY_FILE}" ]]; then
-    echo "→ Generating self-signed cert for internal nginx (Caddy → nginx hop)"
-    openssl req -x509 -nodes -newkey rsa:2048 \
-        -keyout "${NGINX_KEY_FILE}" \
-        -out "${NGINX_CERT_FILE}" \
-        -days 3650 \
-        -subj "/CN=frontend" \
-        -addext "subjectAltName=DNS:frontend,DNS:localhost,IP:127.0.0.1" \
-        >/dev/null 2>&1
-    chmod 600 "${NGINX_KEY_FILE}"
-    chmod 644 "${NGINX_CERT_FILE}"
-fi
-
 # --- write Caddyfile ---------------------------------------------------------
 if [[ "${TLS_ENABLED}" =~ ^[Yy]|[Tt][Rr][Uu][Ee]|1$ ]]; then
     cat > "${CADDYFILE}" <<EOF
@@ -269,27 +250,8 @@ if [[ "${TLS_ENABLED}" =~ ^[Yy]|[Tt][Rr][Uu][Ee]|1$ ]]; then
 ${DOMAIN} {
     encode zstd gzip
 
-    # WebSocket endpoint for live updates. nginx 1.27 cannot reliably
-    # forward an HTTP/2 → HTTP/1.1 upgrade hop even with the canonical
-    # map pattern, so we bypass it entirely: Caddy speaks plain HTTP/1.1
-    # directly to the Spring backend for /api/work/live. The TLS hop
-    # Caddy → browser is unaffected (still ACME on 443).
-    @ws {
-        path /api/work/live
-    }
-    reverse_proxy @ws http://backend:8080 {
+    reverse_proxy http://loom:8080 {
         transport http {
-            versions 1.1
-        }
-    }
-
-    # Everything else (static assets + REST /api/** except the live WS):
-    # reverse-proxy to nginx over HTTPS using the internal self-signed
-    # cert generated above. The Caddy → nginx hop is encrypted, never
-    # plaintext.
-    reverse_proxy https://frontend:443 {
-        transport http {
-            tls_insecure_skip_verify
             versions 1.1
         }
         header_up Host {host}
@@ -315,28 +277,8 @@ else
 :80 {
     encode zstd gzip
 
-    # WebSocket endpoint for live updates. nginx 1.27 cannot reliably
-    # forward an HTTP/2 → HTTP/1.1 upgrade hop even with the canonical
-    # map pattern, so we bypass it entirely: Caddy speaks plain HTTP/1.1
-    # directly to the Spring backend for /api/work/live. The TLS hop
-    # Caddy → browser is unaffected (still ACME on 443 in the TLS
-    # variant of this file).
-    @ws {
-        path /api/work/live
-    }
-    reverse_proxy @ws http://backend:8080 {
+    reverse_proxy http://loom:8080 {
         transport http {
-            versions 1.1
-        }
-    }
-
-    # Everything else (static assets + REST /api/** except the live WS):
-    # reverse-proxy to nginx over HTTPS using the internal self-signed
-    # cert generated above. The Caddy → nginx hop is encrypted, never
-    # plaintext.
-    reverse_proxy https://frontend:443 {
-        transport http {
-            tls_insecure_skip_verify
             versions 1.1
         }
         header_up Host {host}
@@ -362,4 +304,4 @@ if [[ "${TLS_ENABLED}" =~ ^[Yy]|[Tt][Rr][Uu][Ee]|1$ ]]; then
 fi
 
 echo "  Next: docker compose -f compose.yml up -d"
-echo "        (or compose.dev.yml --build for local builds)"
+echo "        (or docker compose -f compose.dev.yml up --build for local builds)"

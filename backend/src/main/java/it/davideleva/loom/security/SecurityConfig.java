@@ -34,6 +34,13 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(requests -> requests
+                .requestMatchers(HttpMethod.GET,
+                    "/", "/index.html", "/favicon.ico", "/*.js", "/*.css", "/*.ico", "/*.png", "/*.svg",
+                    "/*.webp", "/*.woff", "/*.woff2", "/assets/**",
+                    "/media/**",
+                    "/setup", "/login", "/dashboard", "/eventi", "/preferenze-email", "/anomalie",
+                    "/migliorie", "/implementazioni", "/pianificazione", "/eliminate", "/archivio",
+                    "/configurazione", "/configurazione/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/external-login", "/api/setup").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/setup/status", "/api/version").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/branding/internal", "/api/branding/companies/*/logo",
