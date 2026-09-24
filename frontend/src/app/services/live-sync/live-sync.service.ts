@@ -6,6 +6,7 @@ import type { LiveMessage } from '../../shared/models/live-sync.types';
 
 @Injectable({ providedIn: 'root' })
 export class LiveSyncService {
+  private static readonly MIN_SESSION_SECONDS = 35;
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly zone = inject(NgZone);
@@ -30,6 +31,10 @@ export class LiveSyncService {
 
     const connect = () => {
       if (stopped || !this.auth.user()) return;
+      if (!this.auth.hasUsableSession(LiveSyncService.MIN_SESSION_SECONDS)) {
+        this.zone.run(() => this.connected.set(false));
+        return;
+      }
       this.zone.run(() => this.connected.set(false));
       ticketRequest = this.http.post<{ value: string }>('/api/work/live/tickets', { projectId }, {
         headers: this.auth.authHeaders()

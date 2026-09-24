@@ -97,4 +97,21 @@ describe('AuthService', () => {
     sessionStorage.setItem('loom-access-token', 'token-abc');
     expect(service.authHeaders().get('Authorization')).toBe('Bearer token-abc');
   });
+
+  it('hasUsableSession() checks JWT exp when present', () => {
+    const validToken = jwtWithExp(Math.floor(Date.now() / 1000) + 120);
+    sessionStorage.setItem('loom-access-token', validToken);
+    expect(service.hasUsableSession(30)).toBe(true);
+    expect(service.hasUsableSession(180)).toBe(false);
+  });
+
+  it('hasUsableSession() treats legacy non-JWT tokens as usable when present', () => {
+    sessionStorage.setItem('loom-access-token', 'token-abc');
+    expect(service.hasUsableSession(30)).toBe(true);
+  });
 });
+
+function jwtWithExp(exp: number): string {
+  const payload = btoa(JSON.stringify({ exp })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `header.${payload}.signature`;
+}

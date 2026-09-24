@@ -1,7 +1,9 @@
 package it.davideleva.loom.live;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
 import it.davideleva.loom.controller.ApiLookup;
@@ -64,7 +66,7 @@ class LiveTicketServiceTest {
     }
 
     @Test
-    void grantExpiresWithJwtSession() {
+    void ticketIsNotIssuedWhenJwtSessionIsExpiring() {
         Company company = company(5L);
         User team = user(10L, Role.TEAM, company);
         Project project = project(20L, company);
@@ -72,9 +74,10 @@ class LiveTicketServiceTest {
         when(users.findById(10L)).thenReturn(Optional.of(team));
         when(lookup.project(20L)).thenReturn(project);
 
-        LiveTicketService.Ticket ticket = service.issue(20L, auth(10L, Instant.now().minusSeconds(1)));
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+            () -> service.issue(20L, auth(10L, Instant.now().plusSeconds(10))));
 
-        assertNull(service.consume(ticket.value()));
+        assertEquals(401, exception.getStatusCode().value());
     }
 
     private static JwtAuthenticationToken auth(long userId) {

@@ -27,6 +27,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @Slf4j
 public class LiveTicketService {
+    private static final long TICKET_TTL_SECONDS = 30;
+
     public record Ticket(String value) {}
     public record Grant(Long userId, Long projectId, boolean internalAllowed,
                         Instant expiresAt, Instant sessionExpiresAt) {}
@@ -49,8 +51,13 @@ public class LiveTicketService {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String value = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        tickets.put(value, new Grant(user.getId(), projectId, internalAllowed(user), Instant.now().plusSeconds(30),
-            authentication.getToken().getExpiresAt()));
+        Instant now = Instant.now();
+        Instant sessionExpiresAt = authentication.getToken().getExpiresAt();
+        if (sessionExpiresAt == null || !sessionExpiresAt.isAfter(now.plusSeconds(TICKET_TTL_SECONDS))) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Session is expiring");
+        }
+        tickets.put(value, new Grant(user.getId(), projectId, internalAllowed(user), now.plusSeconds(TICKET_TTL_SECONDS),
+            sessionExpiresAt));
         log.info("Live ticket issued: user={} project={} internalAllowed={}", user.getId(), projectId, internalAllowed(user));
         return new Ticket(value);
     }

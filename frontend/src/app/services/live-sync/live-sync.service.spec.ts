@@ -49,7 +49,7 @@ class FakeWebSocket {
 describe('LiveSyncService', () => {
   let service: LiveSyncService;
   let http: HttpTestingController;
-  let auth: { authHeaders: jest.Mock; user: { (): CurrentUser | null } };
+  let auth: { authHeaders: jest.Mock; hasUsableSession: jest.Mock; user: { (): CurrentUser | null } };
   let originalWebSocket: typeof WebSocket | undefined;
 
   const user: CurrentUser = {
@@ -75,6 +75,7 @@ describe('LiveSyncService', () => {
 
     auth = {
       authHeaders: jest.fn(() => new HttpHeaders({ Authorization: 'Bearer test' })),
+      hasUsableSession: jest.fn(() => true),
       user: jest.fn(() => user)
     };
 
@@ -194,5 +195,16 @@ describe('LiveSyncService', () => {
     sub.unsubscribe();
     expect(FakeWebSocket.instances[0].closed).toBe(true);
     expect(service.connected()).toBe(false);
+  }));
+
+  it('does not request a ticket when the session is near expiration', fakeAsync(() => {
+    auth.hasUsableSession.mockReturnValue(false);
+    const sub = service.watch(42);
+    tick();
+
+    http.expectNone('/api/work/live/tickets');
+    expect(FakeWebSocket.instances.length).toBe(0);
+
+    sub.unsubscribe();
   }));
 });

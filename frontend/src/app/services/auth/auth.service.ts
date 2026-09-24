@@ -61,8 +61,28 @@ export class AuthService {
     return token ? this.headers(token) : new HttpHeaders();
   }
 
+  hasUsableSession(minRemainingSeconds = 0): boolean {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) return false;
+    const expiresAt = this.jwtExpiresAt(token);
+    if (expiresAt === null) return true;
+    return expiresAt.getTime() - Date.now() > minRemainingSeconds * 1000;
+  }
+
   private headers(token: string): HttpHeaders {
     return new HttpHeaders({ Authorization: `Bearer ${token}` });
+  }
+
+  private jwtExpiresAt(token: string): Date | null {
+    const [, payload] = token.split('.');
+    if (!payload) return null;
+    try {
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(atob(normalized)) as { exp?: unknown };
+      return typeof decoded.exp === 'number' ? new Date(decoded.exp * 1000) : null;
+    } catch {
+      return null;
+    }
   }
 
   hasValidSession(): Observable<boolean> {
