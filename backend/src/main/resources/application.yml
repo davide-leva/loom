@@ -7,6 +7,10 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        session_factory:
+          statement_inspector: it.davideleva.loom.logging.SqlTraceInspector
   servlet:
     multipart:
       max-file-size: ${ATTACHMENTS_MAX_FILE_SIZE:25MB}
@@ -61,5 +65,7 @@ logging:
     it.davideleva.loom: ${LOG_LEVEL_APP:INFO}
     org.springframework.web: ${LOG_LEVEL_WEB:WARN}
     org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
+    org.hibernate.orm.jdbc.bind: ${LOG_LEVEL_SQL_BIND:WARN}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n"
