@@ -110,12 +110,12 @@ describe('SegnalazioneCreateDialogComponent', () => {
       expect(component.isInternalUser()).toBe(false);
     });
 
-    it('visibleScopes() widens to TEAM+USER for internal users', () => {
+    it('visibleScopes() widens to TEAM+SUPERUSER+USER for internal users', () => {
       userSignal = userOf('USER');
       expect(component.visibleScopes()).toEqual(['USER']);
 
       userSignal = userOf('ADMIN');
-      expect(component.visibleScopes()).toEqual(['USER', 'TEAM']);
+      expect(component.visibleScopes()).toEqual(['USER', 'TEAM', 'SUPERUSER']);
     });
   });
 

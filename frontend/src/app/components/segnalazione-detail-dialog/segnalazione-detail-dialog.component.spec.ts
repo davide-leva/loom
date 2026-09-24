@@ -197,9 +197,9 @@ describe('SegnalazioneDetailDialogComponent', () => {
       expect(component.canArchive()).toBe(false);
     });
 
-    it('canEditAnyField(): TEAM or ADMIN or SUPERUSER', () => {
+    it('canEditAnyField(): all roles can edit at least their visible user fields', () => {
       userSignal.set(userOf('USER'));
-      expect(component.canEditAnyField()).toBe(false);
+      expect(component.canEditAnyField()).toBe(true);
 
       userSignal.set(userOf('TEAM'));
       expect(component.canEditAnyField()).toBe(true);
@@ -320,11 +320,11 @@ describe('SegnalazioneDetailDialogComponent', () => {
       segnalazioniApi.completeDetail();
     });
 
-    it('saveIssueFields() does nothing when user has no editable scopes', () => {
+    it('saveIssueFields() submits only editable field values', () => {
       userSignal.set(userOf('USER'));
       component.fieldsFormModel = { title: '', description: '', values: {}, attachments: {}, internal: false };
       component.saveIssueFields();
-      expect(segnalazioniApi.updateIssueValues).not.toHaveBeenCalled();
+      expect(segnalazioniApi.updateIssueValues).toHaveBeenCalledWith(1, []);
     });
 
     it('fieldsValid() requires mandatory editable fields to be non-empty', () => {
