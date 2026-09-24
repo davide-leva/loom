@@ -47,7 +47,11 @@ fi
 
 echo
 echo "→ Running scripts/configure.sh ${ARGS[*]:-}"
-bash scripts/configure.sh "${ARGS[@]}"
+if [[ "${NONINTERACTIVE:-0}" == "1" || ! -r /dev/tty ]]; then
+    bash scripts/configure.sh "${ARGS[@]}"
+else
+    bash scripts/configure.sh "${ARGS[@]}" < /dev/tty
+fi
 
 echo
 echo "✓ Stack files are in place in ${DIR}."
