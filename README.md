@@ -18,7 +18,7 @@ The production Docker setup exposes the Angular frontend directly from the backe
 On a Debian/Ubuntu server you can install prerequisites, configure the environment, start the stack, and set up automatic updates with:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/master/install.sh)
 ```
 
 The installer:
@@ -32,7 +32,7 @@ The installer:
 Non-interactive mode:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/master/install.sh | \
   LOOM_DOMAIN=loom.example.com \
   LOOM_LETSENCRYPT_EMAIL=admin@example.com \
   LOOM_DB_PASSWORD='change-me' \
