@@ -1,422 +1,397 @@
+<p align="center">
+  <img src="frontend/public/LogoType_Loom.png" alt="Loom" width="280">
+</p>
+
+<p align="center">
+  <a href="docs/README.it.md">Italian README</a> ·
+  <a href="docs/USE_CASES.md">Use cases</a>
+</p>
+
 # Loom
 
-Applicazione ticket completa con backend Spring Boot, frontend Angular, PostgreSQL, Flyway, autenticazione JWT, allegati su filesystem e notifiche email.
+Complete ticketing application with a Spring Boot backend, Angular frontend, PostgreSQL database, Flyway migrations, JWT authentication, filesystem attachments, and email notifications.
 
-## Installazione one-shot
+The production Docker setup exposes the Angular frontend directly from the backend: the application runs as a single Docker image named `loom`.
 
-Su una macchina pulita con `curl`, `openssl` e `docker` (con il plugin `compose`):
+## One-Shot Installation
+
+On a Debian/Ubuntu server you can install prerequisites, configure the environment, start the stack, and set up automatic updates with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/master/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/main/install.sh)
 ```
 
-Lo script scarica il minimo indispensabile (`compose.yml`, `.env.example`, `scripts/configure.sh`) e lancia `configure.sh`, che genera `.env` (mode `0600`) e `Caddyfile`. Al termine:
+The installer:
+
+- installs Docker and the Compose plugin if missing
+- asks for domain, email, database, JWT, and SMTP settings
+- writes `.env`
+- starts `docker compose up -d`
+- optionally installs a systemd timer for automatic image updates
+
+Non-interactive mode:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/main/install.sh | \
+  LOOM_DOMAIN=loom.example.com \
+  LOOM_LETSENCRYPT_EMAIL=admin@example.com \
+  LOOM_DB_PASSWORD='change-me' \
+  LOOM_JWT_SECRET='change-me-change-me-change-me' \
+  bash -s -- --yes
+```
+
+When launched through `curl | bash`, interactive prompts are read from the terminal when available, so the answers are not swallowed by the piped script body.
+
+## Quick Start With Docker Compose
+
+Start the full stack with the published image from GitHub Container Registry:
+
+```bash
+cp .env.example .env
+./scripts/configure.sh
+docker compose up -d
+```
+
+Default local URLs:
+
+- App: <https://localhost> or <http://localhost:8080> with `LOOM_DOMAIN=localhost`
+- API: proxied through the same app origin under `/api`
+
+The backend serves the compiled frontend from the same container, so no separate frontend service is needed in production.
+
+## Start With GitHub Images
+
+Images are published on GitHub Container Registry:
+
+```bash
+ghcr.io/davide-leva/loom:latest
+ghcr.io/davide-leva/loom:<version>
+```
+
+Update `.env` if needed:
+
+```env
+LOOM_IMAGE=ghcr.io/davide-leva/loom:latest
+```
+
+Then start:
 
 ```bash
 docker compose up -d
 ```
 
-Per skip-prompt interattivi (es. CI / provisioning automatico), passare `NONINTERACTIVE=1` davanti alla pipe:
+To update:
 
 ```bash
-NONINTERACTIVE=1 curl -fsSL https://raw.githubusercontent.com/davide-leva/loom/master/install.sh | bash
-```
-
-Variabili accettate: `REPO` (default `davide-leva/loom`), `BRANCH` (default `master`), `DIR` (directory target, default cwd), `NONINTERACTIVE=1`.
-
-## Avvio rapido con Docker Compose
-
-Ci sono due compose:
-
-- `compose.yml`: usa immagini già pubblicate su GitHub Container Registry;
-- `compose.dev.yml`: compila backend e frontend in locale usando i Dockerfile del progetto.
-
-### Avvio con immagini GitHub
-
-Il workflow GitHub pubblica le immagini qui:
-
-```text
-ghcr.io/<owner>/<repo>/backend
-ghcr.io/<owner>/<repo>/frontend
-```
-
-Crea il file `.env` e genera i secret con lo script di bootstrap:
-
-```bash
-./configure.sh
-```
-
-Lo script:
-
-- genera `JWT_SECRET` (e opzionalmente `DB_PASSWORD`) con `openssl`;
-- chiede in prompt le variabili che richiedono intervento umano (abilitazione TLS, dominio, SMTP se le mail sono attive, …);
-- scrive `.env` con mode `0600`;
-- genera il `Caddyfile` in base alla scelta TLS.
-
-Avvia tutto:
-
-```bash
+docker compose pull
 docker compose up -d
 ```
 
-Poi apri:
+## Start With Local Build
 
-- senza TLS: <http://localhost/>
-- con TLS: <https://loom.example.com/> (sostituisci con il tuo dominio)
-
-Se le immagini GHCR sono private, prima fai login:
+For local development or image testing:
 
 ```bash
-echo '<github-token>' | docker login ghcr.io -u '<github-username>' --password-stdin
-```
-
-### Avvio con build locale
-
-Per compilare le immagini dal codice presente nella cartella:
-
-```bash
+cp .env.example .env
+./scripts/configure.sh
 docker compose -f compose.dev.yml up --build
 ```
 
-Anche in questo caso l’applicazione sarà disponibile sull’URL configurato (vedi sopra).
+The development compose file builds the local `loom` image instead of pulling it from GHCR.
 
-Al primo accesso, se il database non contiene utenti, viene mostrata la pagina di configurazione iniziale. Da lì crei la compagnia interna del team sviluppatori e il primo utente `ADMIN`.
-
-### Servizi avviati
-
-Entrambi i compose avviano quattro servizi:
-
-- `database`: PostgreSQL;
-- `backend`: API Spring Boot;
-- `frontend`: Angular servito da nginx, con proxy `/api` verso il backend;
-- `caddy`: reverse proxy HTTPS davanti a frontend. Terminazione TLS automatica via Let's Encrypt (se `TLS_ENABLED=true`), altrimenti solo HTTP su :80.
-
-### Porte esposte sull'host
-
-| Servizio | Porta host | Note |
-| --- | ---: | --- |
-| Caddy | `80`, `443` | unico servizio raggiungibile dall'esterno |
-
-> Backend, frontend e PostgreSQL **non** sono pubblicati sull'host: vivono solo nella rete Docker.
-> Il frontend raggiunge il backend via `http://backend:8080`; il backend raggiunge Postgres via `jdbc:postgresql://database:5432/...`.
-
-### TLS (HTTPS)
-
-Disabilitato di default (HTTP puro su `http://localhost/`). Per abilitare Let's Encrypt:
-
-1. Punta un record DNS `A` (o `AAAA`) del tuo dominio verso l'IP pubblico del server.
-2. Verifica la propagazione: `dig +short loom.example.com`.
-3. Rilancia `./configure.sh` e rispondi `y` a "Enable TLS with Let's Encrypt?", quindi fornisci `DOMAIN` e `ACME_EMAIL`.
-4. Riavvia: `docker compose up -d`.
-
-Il cert viene ottenuto al primo avvio e rinnovato automaticamente prima della scadenza.
-
-### Persistenza Docker
-
-I dati vivono in `./data/` come bind mount (più comodo da ispezionare e backuppare rispetto ai named volume):
-
-- `./data/db/`: dati PostgreSQL;
-- `./data/attachments/`: file caricati nelle issue;
-- `./data/branding/`: loghi delle compagnie e dei progetti;
-- `./data/caddy/`, `./data/caddy-config/`: stato di Caddy (cert Let's Encrypt inclusi).
-
-Per fermare i container senza cancellare i dati:
+First setup:
 
 ```bash
-docker compose down
+./scripts/configure.sh
+docker compose up -d
 ```
 
-Per cancellare anche database e allegati:
+## Started Services
+
+- `database`: PostgreSQL
+- `loom`: single application container with Spring Boot backend and compiled Angular frontend
+- `caddy`: reverse proxy, HTTPS, optional Let's Encrypt
+
+## Exposed Host Ports
+
+`compose.yml` exposes only the proxy ports:
+
+- `80`
+- `443`
+
+The app container is reachable only on the internal Docker network.
+
+For local work without Caddy, use `compose.dev.yml`, which also exposes:
+
+- `8080`: backend and frontend served by Spring Boot
+
+## TLS
+
+For a real domain:
+
+```env
+LOOM_DOMAIN=loom.example.com
+LOOM_LETSENCRYPT_EMAIL=admin@example.com
+```
+
+For local HTTP:
+
+```env
+LOOM_DOMAIN=localhost
+LOOM_LETSENCRYPT_EMAIL=
+```
+
+Caddy automatically manages certificates when a public domain and email are configured.
+
+## Docker Persistence
+
+Persistent data is stored under `./data`:
+
+- `data/postgres`: PostgreSQL data
+- `data/uploads`: uploaded attachments
+- `data/caddy`: Caddy certificates and state
+- `data/caddy_config`: Caddy config state
+
+Backups should include `.env` and the full `data/` directory.
+
+## Backup
+
+PostgreSQL dump:
 
 ```bash
-rm -rf ./data/db ./data/attachments ./data/branding
+docker compose exec -T database pg_dump -U loom loom > loom.sql
 ```
 
-### Backup
-
-Lo script `backup.sh` crea un archivio `tar.gz` di `data/` + `.env` + `Caddyfile` in `backups/` (creato se non esiste), nominato con timestamp UTC ISO-8601:
+Attachments and certificates:
 
 ```bash
-./backup.sh
-# → backups/loom-2026-09-22T19-34-20Z.tar.gz
-
-./backup.sh --label pre-migration
-# → backups/loom-2026-09-22T19-34-20Z-pre-migration.tar.gz
-
-BACKUP_DIR=/mnt/external ./backup.sh
-# → scrive su un mount esterno
+tar -czf loom-data.tgz data .env
 ```
 
-L'archivio viene creato con mode `0600` perché contiene `JWT_SECRET` e `DB_PASSWORD`. Per ripristinare:
+## Publishing Docker Images
+
+The workflow `.github/workflows/publish-images.yml` builds and publishes:
+
+- `ghcr.io/<owner>/<repo>/loom:latest`
+- `ghcr.io/<owner>/<repo>/loom:<version>` on tags like `v1.2.3`
+
+Manual local build:
 
 ```bash
-tar -xzf backups/loom-<timestamp>.tar.gz -C /restore/target
+docker build -t loom:local -f backend/Dockerfile .
 ```
 
-I path nell'archivio sono prefissati con `loom/` per evitare clash in caso di restore in una directory condivisa.
+## `.env` Configuration
 
-## Pubblicazione immagini Docker
+Main variables:
 
-Il workflow `.github/workflows/publish-images.yml` viene eseguito a ogni push e anche manualmente da GitHub Actions. Costruisce e pubblica due immagini su GHCR:
+```env
+LOOM_IMAGE=ghcr.io/davide-leva/loom:latest
+LOOM_DOMAIN=localhost
+LOOM_LETSENCRYPT_EMAIL=
+
+LOOM_DB_NAME=loom
+LOOM_DB_USER=loom
+LOOM_DB_PASSWORD=loom
+
+LOOM_JWT_SECRET=change-me-change-me-change-me-change-me
+LOOM_JWT_TTL_MINUTES=480
+
+LOOM_MAIL_HOST=
+LOOM_MAIL_PORT=587
+LOOM_MAIL_USERNAME=
+LOOM_MAIL_PASSWORD=
+LOOM_MAIL_FROM=
+LOOM_MAIL_SMTP_AUTH=true
+LOOM_MAIL_SMTP_STARTTLS_ENABLE=true
+```
+
+`LOOM_JWT_TTL_MINUTES` controls the default JWT duration. The default is `480` minutes, equal to 8 hours.
+
+Email notifications require SMTP settings, for example:
+
+```env
+LOOM_MAIL_HOST=smtp.example.com
+LOOM_MAIL_PORT=587
+LOOM_MAIL_USERNAME=loom@example.com
+LOOM_MAIL_PASSWORD=secret
+LOOM_MAIL_FROM=loom@example.com
+```
+
+If SMTP is not configured, notification emails are skipped safely.
+
+## Local Development
+
+Backend:
+
+```bash
+cd backend
+./mvnw spring-boot:run
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+Default local frontend URL:
 
 ```text
-ghcr.io/<owner>/<repo>/backend:<tag>
-ghcr.io/<owner>/<repo>/frontend:<tag>
+http://localhost:4200
 ```
 
-Tag creati:
+Default local backend URL:
 
-- branch, per esempio `main`;
-- commit SHA, per esempio `sha-abc1234`;
-- `latest` sul branch predefinito del repository;
-- tag Git, se il push contiene un tag.
-
-Il workflow usa `GITHUB_TOKEN`, quindi non richiede secret aggiuntivi. Nel repository GitHub deve essere consentita la scrittura dei package da Actions.
-
-## Configurazione `.env`
-
-Valori principali:
-
-```env
-DB_NAME=tickets
-DB_USER=dbatickets
-DB_PASSWORD=change-me-database-password
-
-JWT_SECRET=change-me-at-least-32-bytes-long-secret-value
-
-BACKEND_IMAGE=ghcr.io/your-org/loom/backend:latest
-FRONTEND_IMAGE=ghcr.io/your-org/loom/frontend:latest
-
-# TLS via Let's Encrypt (Caddy). Disabilitato di default.
-TLS_ENABLED=false
-DOMAIN=
-ACME_EMAIL=
-
-ATTACHMENTS_MAX_FILE_SIZE=25MB
-ATTACHMENTS_MAX_REQUEST_SIZE=25M
+```text
+http://localhost:8080
 ```
 
-Notifiche email:
+`frontend/proxy.conf.json` forwards `/api` calls to the backend during Angular development.
 
-```env
-MAIL_NOTIFICATIONS_ENABLED=false
-MAIL_FROM=no-reply@loom.local
-MAIL_NOTIFICATIONS_DELAY=5m
-SMTP_HOST=localhost
-SMTP_PORT=25
-SMTP_USERNAME=
-SMTP_PASSWORD=
-SMTP_AUTH=false
-SMTP_STARTTLS_ENABLE=false
-```
-
-Per Gmail, ad esempio, di solito servono SMTP autenticato, STARTTLS e una password app:
-
-```env
-MAIL_NOTIFICATIONS_ENABLED=true
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_AUTH=true
-SMTP_STARTTLS_ENABLE=true
-SMTP_USERNAME=nome.account@gmail.com
-SMTP_PASSWORD=password-app
-MAIL_FROM=nome.account@gmail.com
-```
-
-Il backend usa il logo della compagnia interna nelle email, se presente. Gli allegati vengono salvati in `./data/attachments/`; i loghi in `./data/branding/`.
-
-## Avvio locale per sviluppo
-
-Per sviluppare con hot reload, lo script `scripts/dev.sh` avvia il database in Docker e lancia backend e frontend in locale (Spring Boot + Angular dev server). Richiede Docker, Java 21+, Maven e Node.js.
+You can also use the helper script:
 
 ```bash
-./scripts/dev.sh           # foreground: tail dei log, Ctrl+C per fermare tutto
-./scripts/dev.sh --detach  # background: PIDs e path dei log stampati e poi esce
-./scripts/dev.sh --stop    # ferma i processi locali e il database
+./scripts/dev.sh
 ```
 
-Cosa fa:
+Compose-based development mode:
 
-1. `cd` nella root del repo e legge `.env` da lì;
-2. `docker compose up -d database` e attende il healthcheck `healthy`;
-3. esporta le variabili di `.env` (`set -a; . .env; set +a`);
-4. avvia `mvn spring-boot:run` in `backend/` scrivendo il log in `.dev-logs/backend.log`;
-5. avvia `npm start` in `frontend/` scrivendo il log in `.dev-logs/frontend.log`;
-6. cattura `SIGINT`/`SIGTERM` per terminare entrambi i processi locali e fermare il container del database.
-
-Apri <http://localhost:4200/>. Il dev server di Angular inoltra `/api`, incluso l'upgrade WebSocket, al backend tramite `frontend/proxy.conf.json` (default: `http://localhost:8080`). Dopo una modifica a quel file, riavvia `npm start`: Angular legge la configurazione del proxy solo all'avvio.
-
-Se preferisci i passi manuali: `docker compose up -d database`, poi `cd backend && mvn spring-boot:run` e in un altro terminale `cd frontend && npm start`.
-
-## Note applicative
-
-Conserva `JWT_SECRET` tra i riavvii: cambiandola, i token già emessi cessano di essere validi.
-
-Flyway esegue le migrazioni in `backend/src/main/resources/db/migration/`. Hibernate verifica che le entità corrispondano allo schema senza modificarlo.
-
-Il frontend usa PrimeNG. Durante il setup si scelgono il nome, il colore primary e un logo opzionale della compagnia interna. Ogni compagnia può avere un colore e un logo opzionale; ogni progetto può avere un logo opzionale. Il colore della compagnia dell’utente viene applicato dopo il login. L’header mostra il logo interno e, per gli utenti esterni, quello della loro compagnia. Il progetto selezionato viene conservato in un cookie distinto per utente.
-
-I loghi PNG, JPEG, WebP o SVG (massimo 2 MB) sono salvati in `ROOT_FOLDER/companies/<company_id>.<original_ext>` e `ROOT_FOLDER/projects/<project_id>.<original_ext>`. In Docker, `ROOT_FOLDER` è `/data/branding`; in locale il valore predefinito è `./branding` (relativo alla directory `backend`). Se il logo manca, l’interfaccia mostra il nome.
-
-## Autenticazione
-
-`POST /api/auth/login` accetta:
-
-```json
-{"username":"admin","password":"..."}
+```bash
+./scripts/dev.sh --compose
 ```
 
-e restituisce un access token Bearer valido per 15 minuti.
+This starts the stack with `compose.dev.yml`, rebuilding the local image and exposing the app on port `8080`.
 
-Per verificare il token:
+## Application Notes
+
+- Keep `LOOM_JWT_SECRET` stable between restarts or existing tokens become invalid.
+- Flyway runs database migrations on startup.
+- Hibernate validates the schema after migrations.
+- Uploaded files are stored on disk, not in the database.
+- The Angular app uses PrimeNG and PrimeIcons; icon assets are served by the backend from the compiled frontend bundle.
+- Logos are stored in `frontend/public`.
+
+## Authentication
+
+Loom supports JWT-based authentication.
+
+The main login flow uses:
 
 ```http
-GET /api/auth/me
-Authorization: Bearer <token>
+POST /api/auth/login
 ```
 
-`GET /api/auth/projects` restituisce i progetti visibili all’utente corrente.
+Response:
 
-Non è prevista registrazione pubblica. Gli utenti vengono creati dagli `ADMIN` nelle sezioni di configurazione.
+```json
+{
+  "token": "jwt-token",
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@example.com",
+    "role": "ADMIN"
+  },
+  "expiresInSeconds": 28800
+}
+```
 
-### Autenticazione esterna
+## External Authentication
 
-In **Configurazione → Autenticazione esterna**, un `ADMIN` può abilitare l’accesso per progetto e creare applicazioni con un secret e utenti associati tramite il valore `sub`. Ogni applicazione usa HS256, HS384 o HS512 e può indicare se il secret inserito è Base64. In quel caso il backend lo decodifica prima di verificare la firma; altrimenti usa i byte UTF-8 del testo inserito. La chiave risultante deve contenere almeno 32, 48 o 64 byte rispettivamente, e al massimo 512 byte. Il JWT deve avere `sub` mappato ed `exp` non scaduto.
+External systems can request Loom tokens through dedicated authentication endpoints when enabled by configuration.
 
-Il sistema esterno apre `GET /login?t=<external_token>`. Il frontend rimuove subito `t` dall’URL e invia il token a `POST /api/auth/external-login`; il backend verifica firma, scadenza, mapping e appartenenza al progetto, poi emette il normale access token applicativo. Il JWT esterno non viene salvato.
+This is useful when another platform needs to open Loom with a user context already known by an upstream system.
 
-Usa HTTPS e configura gli eventuali proxy davanti a nginx per non registrare la query string di `/login`: il token è presente nella prima richiesta HTTP.
+## Companies, Users, And Projects
 
-Il secret può essere sostituito modificando l’applicazione; lasciando vuoto il campo viene conservato. Le API di configurazione non ne restituiscono mai il valore. Nel database è cifrato con AES-GCM usando una chiave derivata da `JWT_SECRET`. Conserva `JWT_SECRET` stabile: se cambia, i secret esterni salvati non sono più decifrabili e devono essere reinseriti.
+Loom supports:
 
-## Gestione compagnie, utenti e progetti
+- companies
+- users
+- projects
+- project memberships
+- user roles
 
-La compagnia interna del team sviluppatori viene creata dal setup iniziale. È visualizzata come “Team interno”, può essere modificata e non può essere eliminata. Gli utenti `TEAM` e `ADMIN` appartengono sempre a questa compagnia.
+Projects belong to a company and can be linked to issue workflows and assignments.
 
-Le compagnie cliente contengono utenti `USER` e `SUPERUSER`. Un progetto può essere collegato a una compagnia cliente: in quel caso tutti i suoi utenti entrano automaticamente nel progetto, anche se vengono creati in seguito. Scollegando la compagnia dal progetto, quegli utenti perdono l’accesso automatico. È comunque possibile assegnare utenti esterni in modo esplicito.
+## Issues, Statuses, And Approval
 
-`ADMIN` e `TEAM` vedono solo i progetti a cui sono assegnati, salvo le funzionalità amministrative previste per gli `ADMIN`. `USER` e `SUPERUSER` vedono i progetti della propria compagnia e quelli assegnati esplicitamente.
+Issue management supports:
 
-## Issue, stati e approvazione
+- issue creation
+- issue details
+- assignment
+- status transitions
+- approval or rejection
+- comments
+- attachments
+- issue type classification
 
-Le issue hanno campi standard e campi custom per progetto. La creazione issue usa i campi visibili allo `USER`; la pianificazione assegna tipologia e sviluppatore.
+Statuses and types can be managed from the administrative area.
 
-Stati principali:
+## Email Notifications
 
-- Segnalato;
-- In lavorazione;
-- Completato;
-- Rilasciato;
-- Approvato.
+Email notifications can be sent for relevant issue events, including assignment and workflow changes.
 
-Il passaggio ad “Approvato” non può essere fatto dalla kanban: lo può fare solo un `SUPERUSER` dal dettaglio della issue quando lo stato è “Rilasciato”. Una issue già approvata può essere spostata indietro dalla kanban.
+Configuration is read from the `LOOM_MAIL_*` environment variables. When SMTP is missing, the application continues to run and skips email delivery.
 
-Tipologie:
+## Events And Live Sync
 
-- Anomalia;
-- Miglioria;
-- Implementazione.
+The frontend can receive live work updates through:
 
-## Notifiche email
+```http
+GET /api/work/live
+```
 
-Le notifiche vengono scritte nella tabella eventi e inviate periodicamente agli utenti che hanno abilitato le email a livello personale o per progetto. Il controllo parte subito all’avvio del backend e poi continua con il ritardo configurato da `MAIL_NOTIFICATIONS_DELAY`.
+The endpoint uses the current JWT authentication context. Keeping the token lifetime aligned with the work session avoids periodic `403` responses during long-running sessions.
 
-Eventi notificati:
+## Administrative APIs
 
-- creazione issue;
-- pianificazione issue;
-- cambio stato;
-- approvazione;
-- nuovo commento;
-- eliminazione commento;
-- nuovo allegato;
-- modifica dei campi team;
-- eliminazione issue.
+Some administrative resources are exposed under `/api/admin`.
 
-Il testo email è in italiano e traduce anche stati e tipologie.
+Common areas:
 
-## Eventi e sincronizzazione live
-
-Il registro **Eventi** è accessibile solo a `TEAM` e `ADMIN` e si può filtrare per tipo, utente e data. Le segnalazioni interne restano visibili solo ai ruoli interni.
-
-Dashboard, kanban, pianificazione, registro eventi e dettagli aperti si aggiornano tramite WebSocket quando vengono create o modificate segnalazioni, commenti, allegati, campi team, pianificazioni e stati. Gli avvisi sono inviati dopo il commit della modifica. Il browser apre il canale con un ticket monouso di breve durata, ottenuto tramite JWT, e si riconnette automaticamente se la connessione cade. Il proxy deve inoltrare l'upgrade WebSocket su `/api/work/live`; la configurazione nginx inclusa lo fa già.
-
-Il broker WebSocket è locale al processo backend. Per distribuire più istanze backend serve un broker condiviso per propagare gli avvisi tra istanze.
-
-## API amministrative
-
-I seguenti endpoint richiedono un JWT con ruolo `ADMIN`. Ognuno supporta `GET /`, `GET /{id}`, `POST /`, `PUT /{id}` e `DELETE /{id}` rispetto al percorso indicato:
-
-| Entità | Percorso | Filtri aggiuntivi |
-| --- | --- | --- |
-| Aziende | `/api/companies` | — |
-| Utenti | `/api/users` | `/project/{projectId}`, `/company/{companyId}` |
-| Progetti | `/api/projects` | `/company/{companyId}` |
-| Ticket | `/api/issues` | `/project/{projectId}` |
-| Campi | `/api/issue-fields` | `/project/{projectId}` |
-| Opzioni | `/api/issue-field-options` | `/project/{projectId}`, `/field/{definitionId}` |
-| Valori | `/api/issue-data` | `/project/{projectId}`, `/issue/{issueId}` |
-| Commenti | `/api/issue-comments` | `/project/{projectId}`, `/issue/{issueId}` |
-
-`GET /api/users/project/{projectId}` restituisce gli utenti effettivi del progetto. `/api/project-users` gestisce le assegnazioni esplicite non coperte dal collegamento automatico tra progetto e compagnia.
+| Area | Example |
+| --- | --- |
+| Users | `/api/admin/users` |
+| Companies | `/api/admin/companies` |
+| Projects | `/api/admin/projects` |
+| Issue types | `/api/admin/issue-types` |
+| Issue statuses | `/api/admin/issue-statuses` |
 
 ## Developer Notes
 
-### API notifiche issue
+### Issue Notification APIs
 
-Il riepilogo delle issue nuove o aggiornate è disponibile con:
+Issue-related notification flows are covered by backend services and tests under:
 
-```http
-GET /api/work/projects/{projectId}/notifications
-Authorization: Bearer <access-token-applicativo>
+```text
+backend/src/test/java/it/davideleva/loom/notification
 ```
 
-L'utente non viene passato nella richiesta: viene sempre ricavato dal `sub` del Bearer token. Il `projectId` è nel path, coerentemente con le altre API workspace, e il backend verifica che quell'utente possa vedere il progetto. La risposta è, ad esempio:
+### Internal And External Tokens
 
-```json
-{
-  "projectId": 12,
-  "total": 3,
-  "planning": 1,
-  "anomalies": 1,
-  "improvements": 0,
-  "implementations": 1,
-  "issues": [
-    { "issueId": 41, "issueType": null },
-    { "issueId": 44, "issueType": "ANOMALY" },
-    { "issueId": 51, "issueType": "IMPLEMENTATION" }
-  ]
-}
+JWT expiration is configured with:
+
+```env
+LOOM_JWT_TTL_MINUTES=480
 ```
 
-I contatori rappresentano issue distinte, non eventi: più eventi non letti sulla stessa issue producono un solo incremento. Le azioni eseguite dall'utente stesso non generano un non-letto per quell'utente. Le issue senza tipologia confluiscono in `planning`; le altre nei tre contatori di tipologia. Visibilità delle issue interne, membership del progetto e cancellazioni rispettano le stesse regole delle API workspace.
+Application configuration maps it to:
 
-`GET /api/work/projects/{projectId}/issues` restituisce la lista senza modificare lo stato di lettura. `GET /api/work/issues/{issueId}` restituisce il dettaglio e, nella stessa transazione, registra per l'utente l'ultimo evento visto: dalla successiva chiamata al riepilogo l'issue non compare più, finché non arriva un nuovo evento di un altro utente.
-
-### Token interni ed esterni
-
-Con un token interno ottenuto da `POST /api/auth/login`, il Bearer token si usa direttamente sull'API notifiche.
-
-Le applicazioni configurate in **Configurazione → Autenticazione esterna** effettuano prima l'exchange del proprio JWT esterno:
-
-```http
-POST /api/auth/external-login
-Content-Type: application/json
-
-{ "token": "<jwt-esterno-firmato>" }
+```yaml
+app:
+  jwt:
+    expiration-ms: 28800000
 ```
 
-Il backend valida firma, algoritmo, `exp`, mapping di `sub`, progetto abilitato e membership. La risposta contiene il progetto vincolato al mapping e una sessione applicativa che include internamente lo stesso vincolo di progetto:
+Eight hours correspond to:
 
-```json
-{
-  "session": {
-    "accessToken": "<access-token-applicativo>",
-    "tokenType": "Bearer",
-    "expiresInSeconds": 900
-  },
-  "projectId": 12
-}
+```text
+480 minutes
+28800 seconds
+28800000 milliseconds
 ```
-
-L'applicazione esterna usa quindi `session.accessToken` come Bearer per `GET /api/work/projects/12/notifications` e, quando vuole marcare una issue come vista, per `GET /api/work/issues/{issueId}`. Per queste operazioni il backend rifiuta un `projectId` o una issue appartenenti a un progetto diverso da quello dell'applicazione esterna. In questo modo la stessa API supporta login interno e identità provenienti da token esterni mantenendo un solo formato di access token autorizzativo; il JWT esterno non viene inoltrato alle API workspace né conservato dal sistema.
