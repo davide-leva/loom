@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, effect, inject } from '@angular/core';
+import { Component, computed, effect, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MenuItem } from 'primeng/api';
@@ -9,21 +9,25 @@ import { AuthService } from '../../services/auth/auth.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
 import { NotificheSegnalazioniService } from '../../services/notifiche-segnalazioni/notifiche-segnalazioni.service';
+import { TourService } from '../../services/tour/tour.service';
 import { VersionService } from '../../services/version/version.service';
-import { LOOM_LOGO_URL, LOOM_LOGOTYPE_URL } from '../../shared/brand-assets';
+import { LOOM_LOGOTYPE_URL } from '../../shared/brand-assets';
 import { VersionBadgeComponent } from '../version-badge/version-badge.component';
+import { TourOverlayComponent } from '../tour-overlay/tour-overlay.component';
 
 @Component({
   selector: 'app-main-layout',
-  imports: [FormsModule, RouterLink, RouterLinkActive, RouterOutlet, ButtonModule, MenuModule, SelectModule, VersionBadgeComponent],
+  imports: [FormsModule, RouterLink, RouterLinkActive, RouterOutlet, ButtonModule, MenuModule, SelectModule,
+            TourOverlayComponent, VersionBadgeComponent],
   templateUrl: './main-layout.component.html',
   styleUrl: './main-layout.component.css'
 })
-export class MainLayoutComponent implements OnInit {
+export class MainLayoutComponent {
   readonly auth = inject(AuthService);
   readonly projectContext = inject(ProjectContextService);
   readonly liveSync = inject(LiveSyncService);
   readonly notifications = inject(NotificheSegnalazioniService);
+  readonly tour = inject(TourService);
   private readonly version = inject(VersionService);
   private readonly router = inject(Router);
 
@@ -50,6 +54,11 @@ export class MainLayoutComponent implements OnInit {
       if (projectId) this.notifications.refresh(projectId);
       else this.notifications.clear();
     });
+    effect(() => {
+      const user = this.auth.user();
+      const projectId = this.projectContext.currentProjectId();
+      if (user && projectId) this.tour.startIfNeeded(user);
+    });
   }
 
   ngOnInit(): void {
@@ -58,6 +67,9 @@ export class MainLayoutComponent implements OnInit {
   }
 
   logout(): void {
+    // Cancel the tour without marking it seen so a user who never finishes
+    // still gets to see it again on the next login.
+    this.tour.cancel();
     this.notifications.clear();
     this.projectContext.clear();
     this.auth.logout();

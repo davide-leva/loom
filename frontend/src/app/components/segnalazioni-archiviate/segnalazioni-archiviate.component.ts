@@ -54,7 +54,7 @@ interface SelectOption<T> {
       </div>
 
       @if (projects.currentProjectId()) {
-        <section class="filters" aria-label="Filtri archiviate">
+        <section class="filters" aria-label="Filtri archiviate" data-onboarding="archived-filters">
           <label>
             <span>Cerca</span>
             <input pInputText type="search" [(ngModel)]="textFilter"
@@ -88,6 +88,7 @@ interface SelectOption<T> {
         @if (error()) { <p class="error-message">{{ error() }}</p> }
 
         <p-table [value]="segnalazioniFiltrate()" [(selection)]="selected" selectionMode="multiple" dataKey="id"
+                 data-onboarding="archived-table"
                  [loading]="loading()" responsiveLayout="scroll" styleClass="tabella-segnalazioni">
           <ng-template pTemplate="header">
             <tr>

@@ -60,6 +60,7 @@ function detail(issueOverrides: Partial<SegnalazioneSummary> = {}): Segnalazione
     approveUserId: null, approveUsername: null,
     internal: false, deletedAt: null, archivedAt: null,
     selectValues: {},
+    metadata: null,
     ...issueOverrides
   };
   return { issue, values: [], attachments: [], comments: [] };
@@ -250,6 +251,33 @@ describe('SegnalazioneDetailDialogComponent', () => {
       userSignal.set(userOf('ADMIN', 99));
       component.detail = detail({ issuerUserId: 5 });
       expect(component.canDeleteIssue()).toBe(true);
+    });
+  });
+
+  describe('metadata visibility', () => {
+    it('canSeeMetadata() returns false when metadata is null or empty', () => {
+      userSignal.set(userOf('TEAM'));
+      component.detail = detail({ metadata: null });
+      expect(component.canSeeMetadata()).toBe(false);
+
+      component.detail = detail({ metadata: {} });
+      expect(component.canSeeMetadata()).toBe(false);
+    });
+
+    it('canSeeMetadata() returns false for USER and SUPERUSER even with metadata', () => {
+      component.detail = detail({ metadata: { source: 'jira' } });
+      userSignal.set(userOf('USER'));
+      expect(component.canSeeMetadata()).toBe(false);
+      userSignal.set(userOf('SUPERUSER'));
+      expect(component.canSeeMetadata()).toBe(false);
+    });
+
+    it('canSeeMetadata() returns true for TEAM and ADMIN with non-empty metadata', () => {
+      component.detail = detail({ metadata: { source: 'jira', ticketId: 42 } });
+      userSignal.set(userOf('TEAM'));
+      expect(component.canSeeMetadata()).toBe(true);
+      userSignal.set(userOf('ADMIN'));
+      expect(component.canSeeMetadata()).toBe(true);
     });
   });
 

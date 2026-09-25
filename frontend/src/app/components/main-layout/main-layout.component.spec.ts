@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth/auth.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
 import { NotificheSegnalazioniService } from '../../services/notifiche-segnalazioni/notifiche-segnalazioni.service';
+import { TourService } from '../../services/tour/tour.service';
 import { VersionService } from '../../services/version/version.service';
 import type { CurrentUser, ProjectSummary } from '../../shared/models/auth.types';
 
@@ -13,13 +14,14 @@ describe('MainLayoutComponent', () => {
   let fixture: ComponentFixture<MainLayoutComponent>;
   let component: MainLayoutComponent;
   let router: Router;
+  let tour: TourService;
   let userSignal: ReturnType<typeof signal<CurrentUser | null>>;
   let projectsSignal: ReturnType<typeof signal<ProjectSummary[]>>;
   let currentProjectIdSignal: ReturnType<typeof signal<number | null>>;
   let loadErrorSignal: ReturnType<typeof signal<boolean>>;
   let revisionSignal: ReturnType<typeof signal<number>>;
   let connectedSignal: ReturnType<typeof signal<boolean>>;
-  let auth: { logout: jest.Mock };
+  let auth: { logout: jest.Mock; user: () => CurrentUser | null };
   let projectContext: { load: jest.Mock; clear: jest.Mock; currentProjectId: () => number | null;
                         projects: () => ProjectSummary[]; loadError: () => boolean };
   let liveSync: { watch: jest.Mock; revision: () => number; connected: () => boolean };
@@ -32,6 +34,7 @@ describe('MainLayoutComponent', () => {
 
   beforeEach(async () => {
     sessionStorage.clear();
+    localStorage.clear();
     userSignal = signal<CurrentUser | null>(null);
     projectsSignal = signal<ProjectSummary[]>([]);
     currentProjectIdSignal = signal<number | null>(null);
@@ -39,7 +42,7 @@ describe('MainLayoutComponent', () => {
     revisionSignal = signal(0);
     connectedSignal = signal(false);
 
-    auth = { logout: jest.fn() };
+    auth = { logout: jest.fn(), user: () => userSignal() };
     projectContext = {
       load: jest.fn(),
       clear: jest.fn(),
@@ -64,7 +67,7 @@ describe('MainLayoutComponent', () => {
       imports: [MainLayoutComponent],
       providers: [
         provideRouter([]),
-        { provide: AuthService, useValue: { ...auth, user: userSignal } },
+        { provide: AuthService, useValue: auth },
         { provide: ProjectContextService, useValue: projectContext },
         { provide: LiveSyncService, useValue: liveSync },
         { provide: NotificheSegnalazioniService, useValue: notifications },
@@ -73,6 +76,11 @@ describe('MainLayoutComponent', () => {
     }).compileComponents();
 
     router = TestBed.inject(Router);
+    tour = TestBed.inject(TourService);
+    jest.spyOn(tour, 'startIfNeeded').mockImplementation(() => undefined);
+    jest.spyOn(tour, 'cancel').mockImplementation(() => undefined);
+    jest.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
     fixture = TestBed.createComponent(MainLayoutComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -80,6 +88,7 @@ describe('MainLayoutComponent', () => {
 
   afterEach(() => {
     sessionStorage.clear();
+    localStorage.clear();
   });
 
   it('userMenuItems() includes company name from current user', () => {
@@ -121,11 +130,12 @@ describe('MainLayoutComponent', () => {
     expect(labels).toEqual(expect.arrayContaining(['Notifiche email', 'Logout']));
   });
 
-  it('logout() clears notifications, context and auth, then navigates to /login', () => {
+  it('logout() cancels the tour, clears notifications/context/auth, then navigates to /login', () => {
     const navigateSpy = jest.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
 
     component.logout();
 
+    expect(tour.cancel).toHaveBeenCalled();
     expect(notifications.clear).toHaveBeenCalled();
     expect(projectContext.clear).toHaveBeenCalled();
     expect(auth.logout).toHaveBeenCalled();
@@ -176,5 +186,44 @@ describe('MainLayoutComponent', () => {
     ]);
     fixture.detectChanges();
     expect(component.projectContext.projects().length).toBe(2);
+  });
+
+  it('mounts <app-tour-overlay> in the shell', () => {
+    expect(fixture.nativeElement.querySelector('app-tour-overlay')).not.toBeNull();
+  });
+
+  it('starts the tour via TourService when a USER gets a project', () => {
+    userSignal.set({
+      id: 44, username: 'user', displayName: 'User', email: 'u@e.com',
+      role: 'USER', companyName: 'Acme', companyId: 10, primaryColor: 'blue',
+      companyLogoUrl: null, internalCompanyName: 'Loom', internalLogoUrl: null
+    });
+    currentProjectIdSignal.set(7);
+    fixture.detectChanges();
+
+    expect(tour.startIfNeeded).toHaveBeenCalledWith(expect.objectContaining({ id: 44, role: 'USER' }));
+  });
+
+  it('also asks the tour service to start for a SUPERUSER', () => {
+    userSignal.set({
+      id: 45, username: 'super', displayName: 'Super', email: 's@e.com',
+      role: 'SUPERUSER', companyName: 'Acme', companyId: 10, primaryColor: 'blue',
+      companyLogoUrl: null, internalCompanyName: 'Loom', internalLogoUrl: null
+    });
+    currentProjectIdSignal.set(7);
+    fixture.detectChanges();
+
+    expect(tour.startIfNeeded).toHaveBeenCalledWith(expect.objectContaining({ id: 45, role: 'SUPERUSER' }));
+  });
+
+  it('does not start the tour without a project', () => {
+    userSignal.set({
+      id: 1, username: 'admin', displayName: 'Admin', email: 'a@e.com',
+      role: 'ADMIN', companyName: 'Internal', companyId: 1, primaryColor: 'blue',
+      companyLogoUrl: null, internalCompanyName: 'Loom', internalLogoUrl: null
+    });
+    fixture.detectChanges();
+
+    expect(tour.startIfNeeded).not.toHaveBeenCalled();
   });
 });

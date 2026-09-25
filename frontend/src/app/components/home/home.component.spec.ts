@@ -2,12 +2,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { signal } from '@angular/core';
 import { HomeComponent } from './home.component';
 import { AuthService } from '../../services/auth/auth.service';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { SegnalazioniService } from '../../services/segnalazioni/segnalazioni.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
+import { TourService } from '../../services/tour/tour.service';
 import type { CurrentUser, ProjectSummary } from '../../shared/models/auth.types';
 import type { SegnalazioneCampo, SegnalazioneCampoOpzione, SegnalazioneSummary, ProjectUserSummary } from '../../shared/models/segnalazione.types';
 
@@ -24,6 +26,15 @@ class SegnalazioniStub {
   segnalazioniArchiviate = jest.fn(() => this.segnalazioniArchiviate$);
   segnalazioniEliminate$ = { subscribe: jest.fn() };
   segnalazioniEliminate = jest.fn(() => this.segnalazioniEliminate$);
+  segnalazioneDettaglio$ = { subscribe: jest.fn() };
+  segnalazioneDettaglio = jest.fn(() => this.segnalazioneDettaglio$);
+}
+
+class TourStub {
+  private readonly _dialogRequest = signal<string | null>(null);
+  dialogRequest = jest.fn(() => this._dialogRequest());
+  focusCurrentStep = jest.fn();
+  setDialogRequest(value: string | null) { this._dialogRequest.set(value); }
 }
 
 describe('HomeComponent', () => {
@@ -40,6 +51,7 @@ describe('HomeComponent', () => {
                         projects: () => ProjectSummary[] };
   let segnalazioniApi: SegnalazioniStub;
   let liveSync: { revision: () => number };
+  let tourStub: TourStub;
 
   const adminUser: CurrentUser = {
     id: 1, username: 'mario', displayName: 'Mario', email: 'm@e.com',
@@ -59,6 +71,7 @@ describe('HomeComponent', () => {
       approveUserId: null, approveUsername: null,
       internal: false, deletedAt: null, archivedAt: null,
       selectValues: {},
+      metadata: null,
       ...partial
     } as SegnalazioneSummary;
   }
@@ -77,6 +90,7 @@ describe('HomeComponent', () => {
     };
     segnalazioniApi = new SegnalazioniStub();
     liveSync = { revision: () => revisionSignal() };
+    tourStub = new TourStub();
 
     await TestBed.configureTestingModule({
       imports: [HomeComponent],
@@ -84,10 +98,12 @@ describe('HomeComponent', () => {
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideAnimationsAsync(),
         { provide: AuthService, useValue: auth },
         { provide: ProjectContextService, useValue: projectContext },
         { provide: SegnalazioniService, useValue: segnalazioniApi },
-        { provide: LiveSyncService, useValue: liveSync }
+        { provide: LiveSyncService, useValue: liveSync },
+        { provide: TourService, useValue: tourStub }
       ]
     }).compileComponents();
 
@@ -258,6 +274,44 @@ describe('HomeComponent', () => {
       component.segnalazioni.set([segnalazione({ id: 1 }), segnalazione({ id: 2 })]);
       component.onSegnalazioneEliminata(1);
       expect(component.segnalazioni().map(i => i.id)).toEqual([2]);
+    });
+  });
+
+  describe('tour fallback', () => {
+    beforeEach(() => fixture.detectChanges());
+
+    it('opens the demo detail dialog when the tour asks for a detail and there are no issues', () => {
+      component.segnalazioni.set([]);
+      tourStub.setDialogRequest('detail');
+      fixture.detectChanges();
+      expect(component.tourDemoDialogVisible).toBe(true);
+      expect(component.segnalazioneSelezionataId).toBeNull();
+    });
+
+    it('opens the real detail dialog when there is at least one issue', () => {
+      component.segnalazioni.set([segnalazione({ id: 7 })]);
+      tourStub.setDialogRequest('detail');
+      fixture.detectChanges();
+      expect(component.tourDemoDialogVisible).toBe(false);
+      expect(component.segnalazioneSelezionataId).toBe(7);
+    });
+
+    it('closes the demo dialog when the tour stops requesting dialogs', () => {
+      component.segnalazioni.set([]);
+      tourStub.setDialogRequest('detail');
+      fixture.detectChanges();
+      expect(component.tourDemoDialogVisible).toBe(true);
+
+      tourStub.setDialogRequest(null);
+      fixture.detectChanges();
+      expect(component.tourDemoDialogVisible).toBe(false);
+    });
+
+    it('opens the create dialog when the tour asks for it', () => {
+      tourStub.setDialogRequest('create');
+      fixture.detectChanges();
+      expect(component.createDialogVisible).toBe(true);
+      expect(component.tourDemoDialogVisible).toBe(false);
     });
   });
 });

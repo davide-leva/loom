@@ -9,12 +9,13 @@ import { forkJoin } from 'rxjs';
 import { AuthService } from '../../services/auth/auth.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
 import { SegnalazioneFormComponent, SegnalazioneFormModel } from '../segnalazione-form/segnalazione-form.component';
+import { JsonViewerComponent } from '../json-viewer/json-viewer.component';
 import { SegnalazioniService, STATUS_LABELS, TYPE_LABELS } from '../../services/segnalazioni/segnalazioni.service';
 import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio, SegnalazioneCampo, SegnalazioneCampoOpzione, SegnalazioneCampoValoreInput, StatusSegnalazione, SegnalazioneSummary } from '../../services/segnalazioni/segnalazioni.service';
 
 @Component({
   selector: 'app-segnalazione-detail-dialog',
-  imports: [ButtonModule, DatePipe, DialogModule, FormsModule, SegnalazioneFormComponent, TagModule],
+  imports: [ButtonModule, DatePipe, DialogModule, FormsModule, JsonViewerComponent, SegnalazioneFormComponent, TagModule],
   template: `
     <p-dialog [(visible)]="visible" [modal]="true"
               [style]="{ width: '1440px', maxWidth: '98vw' }" [breakpoints]="{ '720px': '96vw' }"
@@ -30,7 +31,7 @@ import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio,
       @if (loading) {
         <p>Carico dettaglio...</p>
       } @else if (detail) {
-        <section class="detail-grid" [class.has-comments]="detail.comments.length > 0">
+        <section class="detail-grid" [class.has-comments]="detail.comments.length > 0" data-onboarding="issue-detail">
           <div class="main-detail">
             <h2>{{ detail.issue.title }}</h2>
             <div class="auto-fields" aria-label="Campi automatici">
@@ -54,6 +55,18 @@ import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio,
                 <div>
                   <dt>Visibilità</dt>
                   <dd>Solo Interna</dd>
+                </div>
+              }
+              @if (detail.issue.releasedAt) {
+                <div>
+                  <dt>Rilasciata il</dt>
+                  <dd>{{ detail.issue.releasedAt | date:'dd/MM/yyyy HH:mm' }}</dd>
+                </div>
+              }
+              @if (detail.issue.approvedAt) {
+                <div>
+                  <dt>Approvata il</dt>
+                  <dd>{{ detail.issue.approvedAt | date:'dd/MM/yyyy HH:mm' }}</dd>
                 </div>
               }
             </div>
@@ -116,6 +129,10 @@ import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio,
                   <p-button label="Elimina segnalazione" icon="pi pi-trash" severity="danger" [loading]="deleting"
                             (onClick)="eliminaSegnalazione()" />
                 }
+                @if (canSeeMetadata()) {
+                  <p-button label="Metadati" icon="pi pi-code" severity="secondary" [outlined]="true"
+                            (onClick)="metadataDialogVisible = true" />
+                }
               </div>
             }
           </div>
@@ -140,7 +157,7 @@ import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio,
                 <p class="muted">Nessun commento.</p>
               }
             </div>
-            <form class="comment-form" (ngSubmit)="addComment()">
+            <form class="comment-form" (ngSubmit)="addComment()" data-onboarding="issue-comments">
               <textarea name="comment" [(ngModel)]="commentDraft" rows="4" placeholder="Scrivi un commento"></textarea>
               <p-button type="submit" label="Invia" icon="pi pi-send" styleClass="w-full" [loading]="commentSaving"
                         [disabled]="!commentDraft.trim()" />
@@ -176,6 +193,18 @@ import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio,
                   (onClick)="downloadPreview()" />
       </div>
     </p-dialog>
+
+    <p-dialog header="Metadati" [(visible)]="metadataDialogVisible" [modal]="true"
+              [style]="{ width: '720px', maxWidth: '96vw' }" [breakpoints]="{ '720px': '96vw' }"
+              [draggable]="false" [resizable]="false">
+      @if (metadataForViewer(); as metadata) {
+        <div class="metadata-viewer">
+          <app-json-viewer [value]="metadata" />
+        </div>
+      } @else {
+        <p class="muted">Nessun metadato disponibile.</p>
+      }
+    </p-dialog>
   `,
   styleUrl: './segnalazione-detail-dialog.component.css'
 })
@@ -197,6 +226,7 @@ export class SegnalazioneDetailDialogComponent {
   deleting = false;
   commentSaving = false;
   fieldsSaving = false;
+  metadataDialogVisible = false;
   error = '';
   commentDraft = '';
   detail: SegnalazioneDettaglio | null = null;
@@ -404,6 +434,23 @@ export class SegnalazioneDetailDialogComponent {
     if (user.role === 'ADMIN') return true;
     const created = new Date(segnalazione.createdAt).getTime();
     return segnalazione.issuerUserId === user.id && Date.now() - created <= 10 * 60 * 1000;
+  }
+
+  canSeeMetadata(): boolean {
+    const role = this.auth.user()?.role;
+    if (role !== 'ADMIN' && role !== 'TEAM') return false;
+    const metadata = this.detail?.issue.metadata;
+    return metadata !== null && metadata !== undefined && Object.keys(metadata).length > 0;
+  }
+
+  /** Returns the issue's metadata when it is a non-empty object, otherwise null.
+   *  Used by the metadata dialog so the template can pass a non-null value to
+   *  <app-json-viewer> while keeping strict-null template type checking happy. */
+  metadataForViewer(): Record<string, unknown> | null {
+    const metadata = this.detail?.issue.metadata;
+    if (metadata == null) return null;
+    if (Object.keys(metadata).length === 0) return null;
+    return metadata;
   }
 
   eliminaSegnalazione(): void {

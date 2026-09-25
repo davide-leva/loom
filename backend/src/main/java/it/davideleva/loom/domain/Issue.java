@@ -12,11 +12,14 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "issues")
@@ -79,6 +82,15 @@ public class Issue {
 
     @Column(name = "archived_at")
     private Instant archivedAt;
+
+    /**
+     * Arbitrary JSON metadata attached to the issue. Only writable via API (the form
+     * never exposes it) so external systems can keep their own bookkeeping data
+     * alongside the issue. Null when not provided.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "metadata", columnDefinition = "jsonb")
+    private Map<String, Object> metadata;
 
     public Issue(Project project, String title, String description, IssueType issueType) {
         this.project = project;

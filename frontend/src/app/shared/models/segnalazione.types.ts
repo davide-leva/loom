@@ -96,6 +96,11 @@ export interface SegnalazioneSummary {
   deletedAt: string | null;
   archivedAt: string | null;
   selectValues: Record<number, string[]>;
+  /**
+   * Optional JSON metadata attached to the issue. Only writable via API; never
+   * editable through the form. Null when the integrating system hasn't set any.
+   */
+  metadata: Record<string, unknown> | null;
 }
 
 export interface CreaSegnalazioneInput {

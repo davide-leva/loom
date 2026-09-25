@@ -4,7 +4,8 @@
 
 <p align="center">
   <a href="docs/README.it.md">Italian README</a> ·
-  <a href="docs/USE_CASES.md">Use cases</a>
+  <a href="docs/USE_CASES.md">Use cases</a> ·
+  <a href="docs/DEV_NOTES.md">DEV_NOTES</a>
 </p>
 
 # Loom

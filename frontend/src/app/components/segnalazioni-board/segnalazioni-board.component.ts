@@ -50,7 +50,7 @@ interface SelectFieldFilter {
       </div>
 
       @if (projects.currentProjectId()) {
-        <section class="filters" aria-label="Filtri kanban">
+        <section class="filters" aria-label="Filtri kanban" data-onboarding="board-filters">
           <label>
             <span>Cerca</span>
             <input pInputText type="search" [(ngModel)]="textFilter" placeholder="ID, titolo, descrizione..." />
@@ -103,10 +103,11 @@ interface SelectFieldFilter {
           </div>
         </div>
 
-        <section #kanbanBoard class="kanban" aria-label="Kanban segnalazioni"
+        <section #kanbanBoard class="kanban" aria-label="Kanban segnalazioni" data-onboarding="board-columns"
                  (scroll)="updateFloatingHeaders()">
           @for (status of statuses; track status) {
             <article #kanbanColumn class="kanban-column"
+                     [attr.data-onboarding]="status === 'APPROVED' ? 'board-approved-column' : null"
                      (dragover)="allowDrop($event)"
                      (drop)="dropOnStatus(status)">
               <header [class.is-detached]="floatingHeadersVisible">

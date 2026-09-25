@@ -100,12 +100,22 @@ describe('SegnalazioneFormComponent', () => {
 
     it('setFiles() appends when multiple, deduplicating identical files', () => {
       component.fields = [field({ id: 1, type: 'ATTACHMENTS', multiple: true })];
-      const existing = new File(['a'], 'a.txt');
-      const newFile = new File(['b'], 'b.txt');
-      const dupOfExisting = new File(['a'], 'a.txt');
+      // Force the same `lastModified` so the dedup comparator treats them as
+      // identical. Without an explicit value each `new File()` would pick up a
+      // slightly different current timestamp.
+      const fixedTimestamp = 1_700_000_000_000;
+      const existing = new File(['a'], 'a.txt', { lastModified: fixedTimestamp });
+      const newFile = new File(['b'], 'b.txt', { lastModified: fixedTimestamp });
+      const dupOfExisting = new File(['a'], 'a.txt', { lastModified: fixedTimestamp });
       component.model.attachments[1] = [existing];
       component.setFiles(1, { currentFiles: [newFile, dupOfExisting] } as any);
-      expect(component.model.attachments[1]).toEqual([existing, newFile]);
+      // jsdom File objects don't expose the private `#channel` field that
+      // Jest's structural matcher relies on, so compare by metadata instead.
+      const result = component.model.attachments[1].map(f => ({ name: f.name, size: f.size }));
+      expect(result).toEqual([
+        { name: 'a.txt', size: existing.size },
+        { name: 'b.txt', size: newFile.size }
+      ]);
     });
 
     it('removeFile() drops the matching file', () => {

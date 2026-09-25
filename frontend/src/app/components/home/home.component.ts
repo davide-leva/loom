@@ -17,9 +17,11 @@ import { SegnalazioniService, SEGNALAZIONE_STATUS, STATUS_LABELS, TYPE_LABELS } 
 import type { SegnalazioneCampo, SegnalazioneCampoOpzione, StatusSegnalazione, SegnalazioneSummary, ProjectUserSummary } from '../../services/segnalazioni/segnalazioni.service';
 import { SegnalazioneCreateDialogComponent } from '../segnalazione-create-dialog/segnalazione-create-dialog.component';
 import { SegnalazioneDetailDialogComponent } from '../segnalazione-detail-dialog/segnalazione-detail-dialog.component';
+import { TourIssueDetailDialogComponent } from '../tour-issue-detail-dialog/tour-issue-detail-dialog.component';
 import { ReportSegnalazioniDialogComponent } from '../report-segnalazioni-dialog/report-segnalazioni-dialog.component';
 import { ProjectContextService } from '../../services/project-context/project-context.service';
 import { LiveSyncService } from '../../services/live-sync/live-sync.service';
+import { TourService } from '../../services/tour/tour.service';
 import { SelectFilterValue, filtraSegnalazioni } from '../../services/segnalazioni/segnalazione-filtri';
 
 interface SelectOption<T> {
@@ -34,7 +36,7 @@ interface SelectFieldFilter {
 
 @Component({
   selector: 'app-home',
-  imports: [BadgeModule, ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, SegnalazioneCreateDialogComponent, SegnalazioneDetailDialogComponent, ReportSegnalazioniDialogComponent, MultiSelectModule, SelectModule, TableModule, TagModule],
+  imports: [BadgeModule, ButtonModule, CardModule, DatePickerModule, DatePipe, FormsModule, InputTextModule, SegnalazioneCreateDialogComponent, SegnalazioneDetailDialogComponent, TourIssueDetailDialogComponent, ReportSegnalazioniDialogComponent, MultiSelectModule, SelectModule, TableModule, TagModule],
   template: `
     <p-card styleClass="dashboard-card">
       <div class="page-title">
@@ -48,9 +50,10 @@ interface SelectFieldFilter {
         </div>
         <div class="page-actions">
           <p-button label="Report PDF" icon="pi pi-file-pdf" severity="primary" [outlined]="true"
+                    data-onboarding="dashboard-pdf-report"
                     [disabled]="!projects.currentProjectId()" (onClick)="reportDialogVisible = true" />
-          <p-button label="Nuova segnalazione" icon="pi pi-plus" [disabled]="!projects.currentProjectId()"
-                    (onClick)="openCreateDialog()" />
+          <p-button label="Nuova segnalazione" icon="pi pi-plus" data-onboarding="dashboard-new-issue"
+                    [disabled]="!projects.currentProjectId()" (onClick)="openCreateDialog()" />
           @if (auth.user()?.role === 'ADMIN') {
             <p-button label="Eliminate" icon="pi pi-trash" severity="danger" [outlined]="true"
                       [disabled]="!projects.currentProjectId()" (onClick)="navigate('/eliminate')">
@@ -58,6 +61,7 @@ interface SelectFieldFilter {
             </p-button>
           }
           <p-button label="Archiviate" icon="pi pi-inbox" severity="secondary" [outlined]="true"
+                    data-onboarding="dashboard-archived"
                     [disabled]="!projects.currentProjectId()" (onClick)="navigate('/archivio')">
             @if (archivedCount() > 0) { <p-badge [value]="archivedCount()" severity="info" /> }
           </p-button>
@@ -67,7 +71,7 @@ interface SelectFieldFilter {
       </div>
 
       @if (projects.currentProjectId()) {
-        <section class="filters" aria-label="Filtri dashboard">
+        <section class="filters" aria-label="Filtri dashboard" data-onboarding="dashboard-filters">
           <label>
             <span>Cerca</span>
             <input pInputText type="search" [(ngModel)]="textFilter" placeholder="ID, titolo, segnalatore..." />
@@ -147,6 +151,9 @@ interface SelectFieldFilter {
         <app-segnalazione-detail-dialog [issueId]="segnalazioneSelezionataId" (issueChanged)="onSegnalazioneModificata($event)" (issueDeleted)="onSegnalazioneEliminata($event)"
                                  (closed)="segnalazioneSelezionataId = null" />
       }
+      @if (tourDemoDialogVisible) {
+        <app-tour-issue-detail-dialog (closed)="tourDemoDialogVisible = false" />
+      }
       @if (reportDialogVisible) {
         <app-report-segnalazioni-dialog [projectId]="projects.currentProjectId()" [users]="users()"
                                  (closed)="reportDialogVisible = false" />
@@ -161,6 +168,7 @@ export class HomeComponent {
   private readonly eventSync = inject(LiveSyncService);
   private readonly router = inject(Router);
   readonly auth = inject(AuthService);
+  private readonly tour = inject(TourService);
 
   readonly segnalazioni = signal<SegnalazioneSummary[]>([]);
   readonly users = signal<ProjectUserSummary[]>([]);
@@ -172,6 +180,8 @@ export class HomeComponent {
   createDialogVisible = false;
   reportDialogVisible = false;
   segnalazioneSelezionataId: number | null = null;
+  tourDemoDialogVisible = false;
+  private lastDialogRequest: string | null = null;
 
   navigate(path: string): void {
     this.router.navigateByUrl(path);
@@ -245,6 +255,33 @@ export class HomeComponent {
       this.lastRevision = revision;
       if (projectChanged) this.resetForProject();
       if (projectId) this.load();
+    });
+
+    // When the tour wants to showcase a dialog, open it on this page so the
+    // cutout can land on the dialog content. Pick the first segnalazione for
+    // the detail dialog; if the project has none, fall back to a demo dialog
+    // so the tour can still showcase the layout.
+    effect(() => {
+      const request = this.tour.dialogRequest();
+      if (request === this.lastDialogRequest) return;
+      this.lastDialogRequest = request;
+      if (!request) {
+        this.tourDemoDialogVisible = false;
+        return;
+      }
+      if (request === 'create') {
+        this.openCreateDialog();
+      } else {
+        const firstIssue = this.segnalazioni()[0];
+        if (firstIssue) {
+          this.tourDemoDialogVisible = false;
+          this.openDetail(firstIssue);
+        } else {
+          this.tourDemoDialogVisible = true;
+        }
+      }
+      // Re-measure after Angular has rendered the dialog.
+      setTimeout(() => this.tour.focusCurrentStep(), 50);
     });
   }
 

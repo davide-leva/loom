@@ -1,6 +1,6 @@
 <div class="app-shell">
   <header class="app-header">
-    <a class="brand" routerLink="/dashboard" aria-label="Dashboard">
+    <a class="brand" routerLink="/dashboard" aria-label="Dashboard" data-onboarding="brand">
       @if (auth.user()?.internalLogoUrl; as logo) {
         <img [src]="logo" [alt]="'Logo ' + (auth.user()?.internalCompanyName ?? 'compagnia interna')" />
       } @else {
@@ -19,19 +19,20 @@
     </a>
 
     <nav class="main-nav" aria-label="Navigazione principale">
-      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"><i class="pi pi-chart-bar" aria-hidden="true"></i>Dashboard</a>
+      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
+         data-onboarding="dashboard-link"><i class="pi pi-chart-bar" aria-hidden="true"></i>Dashboard</a>
       @if (auth.user()?.role === 'ADMIN') {
         <a routerLink="/pianificazione" routerLinkActive="active"><i class="pi pi-calendar" aria-hidden="true"></i>Pianificazione
           @if (notifications.planningCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
         </a>
       }
-      <a routerLink="/anomalie" routerLinkActive="active"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i>Anomalie
+      <a routerLink="/anomalie" routerLinkActive="active" data-onboarding="anomalies-link"><i class="pi pi-exclamation-triangle" aria-hidden="true"></i>Anomalie
         @if (notifications.anomaliesCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
       </a>
-      <a routerLink="/migliorie" routerLinkActive="active"><i class="pi pi-lightbulb" aria-hidden="true"></i>Migliorie
+      <a routerLink="/migliorie" routerLinkActive="active" data-onboarding="improvements-link"><i class="pi pi-lightbulb" aria-hidden="true"></i>Migliorie
         @if (notifications.improvementsCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
       </a>
-      <a routerLink="/implementazioni" routerLinkActive="active"><i class="pi pi-code" aria-hidden="true"></i>Implementazioni
+      <a routerLink="/implementazioni" routerLinkActive="active" data-onboarding="implementations-link"><i class="pi pi-code" aria-hidden="true"></i>Implementazioni
         @if (notifications.implementationsCount(); as count) { <span class="notification-badge" [attr.aria-label]="count + ' segnalazioni non lette'">{{ count }}</span> }
       </a>
       @if (auth.user()?.role === 'ADMIN' || auth.user()?.role === 'TEAM') {
@@ -43,7 +44,7 @@
     </nav>
 
     <div class="header-actions">
-      <label class="project-picker">
+      <label class="project-picker" data-onboarding="project-picker">
         <p-select inputId="current-project" [options]="projectContext.projects()"
                   optionLabel="name" optionValue="id" [ngModel]="projectContext.currentProjectId()"
                   (ngModelChange)="projectContext.select($event)" [disabled]="projectContext.projects().length === 0"
@@ -69,7 +70,7 @@
       <p-menu #userMenu [model]="userMenuItems()" [popup]="true" appendTo="body" />
       <p-button [label]="auth.user()?.displayName ?? 'Utente'" icon="pi pi-user" iconPos="left"
                 severity="secondary" [outlined]="true" (onClick)="userMenu.toggle($event)"
-                ariaLabel="Menu utente" />
+                ariaLabel="Menu utente" data-onboarding="user-menu" />
     </div>
   </header>
 
@@ -83,7 +84,7 @@
     </a>
     <div class="app-footer__status">
       @if (projectContext.currentProjectId()) {
-        <span class="live-status" [class.connected]="liveSync.connected()" role="status">
+        <span class="live-status" [class.connected]="liveSync.connected()" role="status" data-onboarding="live-status">
           <i class="pi" [class.pi-circle-fill]="liveSync.connected()" [class.pi-sync]="!liveSync.connected()" aria-hidden="true"></i>
           {{ liveSync.connected() ? 'Live' : 'Riconnessione...' }}
         </span>
@@ -91,4 +92,7 @@
       <app-version-badge />
     </div>
   </footer>
+
+  <app-tour-overlay />
 </div>
+

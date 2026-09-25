@@ -120,7 +120,8 @@ public class WorkspaceIssueController {
         Long issuerUserId, String issuerUsername, Long devUserId, String devUsername,
         Long approveUserId, String approveUsername, boolean internal,
         Instant deletedAt, Instant archivedAt,
-        Map<Long, List<String>> selectValues
+        Map<Long, List<String>> selectValues,
+        Map<String, Object> metadata
     ) {}
 
     public record IdsPayload(@NotEmpty List<Long> ids) {}
@@ -150,7 +151,8 @@ public class WorkspaceIssueController {
         @NotBlank @Size(max = 255) String title,
         @NotBlank String description,
         List<FieldValueInput> values,
-        Boolean internal
+        Boolean internal,
+        Map<String, Object> metadata
     ) {}
 
     public record PlanningPatch(@NotNull IssueType issueType, Long devUserId) {}
@@ -336,6 +338,9 @@ public class WorkspaceIssueController {
         Issue issue = new Issue(project, input.title().trim(), input.description().trim(), null);
         issue.setIssuer(reporter);
         issue.setInternal(isInternalUser(reporter) && Boolean.TRUE.equals(input.internal()));
+        if (input.metadata() != null && !input.metadata().isEmpty()) {
+            issue.setMetadata(input.metadata());
+        }
         Issue saved = issues.save(issue);
         List<IssueData> initialValues = validatedValues(saved,
             input.values() == null ? List.of() : input.values(), writableScopesFor(reporter));
@@ -733,16 +738,31 @@ public class WorkspaceIssueController {
         if (previousStatus != input.status() && !isInternalUser(actor)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "TEAM or ADMIN role required to change issue status");
         }
-        issue.setStatus(input.status());
-        if (input.status() == IssueStatus.RELEASED && issue.getReleasedAt() == null) {
+        IssueStatus newStatus = input.status();
+        issue.setStatus(newStatus);
+
+        // releasedAt: stamp every time the issue reaches RELEASED; clear it whenever the
+        // issue leaves RELEASED unless it is being promoted to APPROVED (which inherits it).
+        if (newStatus == IssueStatus.RELEASED) {
             issue.setReleasedAt(Instant.now());
+        } else if (newStatus != IssueStatus.APPROVED) {
+            issue.setReleasedAt(null);
         }
-        if (previousStatus != input.status()) {
+
+        // approvedAt + approver: stamped by approve() on entry; cleared here on regression
+        // so the detail view never shows a stale "Approvata il" timestamp for an
+        // issue that is no longer approved.
+        if (newStatus != IssueStatus.APPROVED) {
+            issue.setApprovedAt(null);
+            issue.setApprover(null);
+        }
+
+        if (previousStatus != newStatus) {
             eventService.issueEvent(EventType.ISSUE_STATUS_CHANGED, issue, actor,
-                "Stato: " + statusLabel(previousStatus) + " → " + statusLabel(input.status())
-                + "\n" + previousStatus + " -> " + input.status());
+                "Stato: " + statusLabel(previousStatus) + " → " + statusLabel(newStatus)
+                + "\n" + previousStatus + " -> " + newStatus);
             log.info("Issue status changed: project={} issue={} actor={} from={} to={}",
-                issue.getProject().getId(), issue.getId(), actor.getId(), previousStatus, input.status());
+                issue.getProject().getId(), issue.getId(), actor.getId(), previousStatus, newStatus);
         }
         return issueOutput(issue);
     }
@@ -991,7 +1011,8 @@ public class WorkspaceIssueController {
             id(issue.getIssuer()), username(issue.getIssuer()), id(issue.getDeveloper()), username(issue.getDeveloper()),
             id(issue.getApprover()), username(issue.getApprover()), issue.isInternal(),
             issue.getDeletedAt(), issue.getArchivedAt(),
-            selectValuesByField == null ? Map.of() : selectValuesByField);
+            selectValuesByField == null ? Map.of() : selectValuesByField,
+            issue.getMetadata());
     }
 
     private static IssueOutput issueOutput(Issue issue) {

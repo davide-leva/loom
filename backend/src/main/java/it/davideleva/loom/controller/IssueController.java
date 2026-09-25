@@ -14,6 +14,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -45,7 +46,8 @@ public class IssueController {
         @NotNull IssueType issueType,
         Long issuerUserId,
         Long devUserId,
-        Boolean internal
+        Boolean internal,
+        Map<String, Object> metadata
     ) {}
 
     public record Update(
@@ -58,13 +60,15 @@ public class IssueController {
         Long issuerUserId,
         Long devUserId,
         Long approveUserId,
-        @NotNull Boolean internal
+        @NotNull Boolean internal,
+        Map<String, Object> metadata
     ) {}
 
     public record Output(
         Long id, Long projectId, String title, String description, Instant createdAt,
         IssueStatus status, IssueType issueType, Instant releasedAt, Instant approvedAt,
-        Long issuerUserId, Long devUserId, Long approveUserId, boolean internal
+        Long issuerUserId, Long devUserId, Long approveUserId, boolean internal,
+        Map<String, Object> metadata
     ) {}
 
     @GetMapping
@@ -91,6 +95,9 @@ public class IssueController {
         issue.setIssuer(participant(project, input.issuerUserId()));
         issue.setDeveloper(participant(project, input.devUserId()));
         issue.setInternal(Boolean.TRUE.equals(input.internal()));
+        if (input.metadata() != null && !input.metadata().isEmpty()) {
+            issue.setMetadata(input.metadata());
+        }
         return output(issues.save(issue));
     }
 
@@ -108,6 +115,12 @@ public class IssueController {
         issue.setDeveloper(participant(project, input.devUserId()));
         issue.setApprover(participant(project, input.approveUserId()));
         issue.setInternal(input.internal());
+        // Passing an explicit null clears the metadata. An empty map is treated
+        // as "leave it alone" so admin tooling can update other fields without
+        // wiping metadata.
+        if (input.metadata() != null) {
+            issue.setMetadata(input.metadata().isEmpty() ? null : input.metadata());
+        }
         return output(issue);
     }
 
@@ -129,7 +142,8 @@ public class IssueController {
         return new Output(issue.getId(), issue.getProject().getId(), issue.getTitle(),
             issue.getDescription(), issue.getCreatedAt(), issue.getStatus(), issue.getIssueType(),
             issue.getReleasedAt(), issue.getApprovedAt(), id(issue.getIssuer()),
-            id(issue.getDeveloper()), id(issue.getApprover()), issue.isInternal());
+            id(issue.getDeveloper()), id(issue.getApprover()), issue.isInternal(),
+            issue.getMetadata());
     }
 
     private static Long id(User user) {

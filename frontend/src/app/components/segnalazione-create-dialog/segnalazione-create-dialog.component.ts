@@ -22,7 +22,8 @@ import type { SegnalazioneCampo, SegnalazioneCampoOpzione, SegnalazioneCampoValo
         } @else {
           <app-segnalazione-form [model]="formModel" [fields]="fields" [optionsByField]="optionsByField"
                           [visibleScopes]="visibleScopes()" [editableScopes]="editableScopes()"
-                          [showInternalControl]="isInternalUser()" [canEditInternal]="isInternalUser()" />
+                          [showInternalControl]="isInternalUser()" [canEditInternal]="isInternalUser()"
+                          data-onboarding="new-issue-form" />
         }
 
         @if (error) {
