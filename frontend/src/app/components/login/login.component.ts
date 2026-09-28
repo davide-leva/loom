@@ -36,6 +36,8 @@ export class LoginComponent implements OnInit {
   username = '';
   password = '';
   loading = false;
+  externalLoginActive = false;
+  externalTokenSubject = '';
   error = '';
 
   ngOnInit(): void {
@@ -45,9 +47,11 @@ export class LoginComponent implements OnInit {
         if (!this.auth.user()) applyBrandColor(brand.primaryColor);
       }
     });
-    const externalToken = this.route.snapshot.queryParamMap.get('t');
+    const externalToken = this.externalTokenFromUrl();
     if (externalToken !== null) {
       this.location.replaceState('/login');
+      this.externalLoginActive = true;
+      this.externalTokenSubject = this.subjectFromToken(externalToken) ?? 'utente esterno';
       this.loading = true;
       this.auth.loginExternal(externalToken).pipe(finalize(() => this.loading = false)).subscribe({
         next: projectId => {
@@ -62,6 +66,32 @@ export class LoginComponent implements OnInit {
       });
     }
     this.setup.status().subscribe({ next: status => { if (status.required) void this.router.navigateByUrl('/setup'); } });
+  }
+
+  private externalTokenFromUrl(): string | null {
+    const params = this.route.snapshot.queryParamMap;
+    const queryToken = params.get('t') ?? params.get('token') ?? params.get('jwt') ?? params.get('access_token');
+    if (queryToken) return queryToken;
+
+    const fragment = this.route.snapshot.fragment;
+    if (!fragment) return null;
+
+    const hashParams = new URLSearchParams(fragment.startsWith('#') ? fragment.slice(1) : fragment);
+    return hashParams.get('t') ?? hashParams.get('token') ?? hashParams.get('jwt') ?? hashParams.get('access_token');
+  }
+
+  private subjectFromToken(token: string): string | null {
+    const [, payload] = token.split('.');
+    if (!payload) return null;
+
+    try {
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+      const decoded = JSON.parse(atob(padded)) as { sub?: unknown };
+      return typeof decoded.sub === 'string' && decoded.sub.trim() ? decoded.sub : null;
+    } catch {
+      return null;
+    }
   }
 
   login(): void {

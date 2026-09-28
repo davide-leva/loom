@@ -176,6 +176,19 @@ describe('LoginComponent', () => {
       expect(locationReplaceState).toHaveBeenCalledWith('/login');
     });
 
+    it('shows the external login screen instead of the login form', () => {
+      queryParamMap = { t: tokenWithSubject('cliente-42') };
+      fixture.detectChanges();
+      flushBranding();
+      fixture.detectChanges();
+
+      expect(component.externalLoginActive).toBe(true);
+      expect(component.externalTokenSubject).toBe('cliente-42');
+      expect(fixture.nativeElement.querySelector('.external-login-panel')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('.login-card')).toBeNull();
+      expect(fixture.nativeElement.textContent).toContain('Accedendo come cliente-42');
+    });
+
     it('external login success routes to / and remembers project', () => {
       const navigateSpy = jest.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
       setupExternal();
@@ -210,3 +223,15 @@ describe('LoginComponent', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/setup');
   });
 });
+
+function tokenWithSubject(subject: string): string {
+  return [
+    base64UrlEncode({ alg: 'HS256', typ: 'JWT' }),
+    base64UrlEncode({ sub: subject }),
+    'signature'
+  ].join('.');
+}
+
+function base64UrlEncode(value: unknown): string {
+  return btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}

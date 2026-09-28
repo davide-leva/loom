@@ -32,6 +32,8 @@ app:
     issuer: loom
     ttl-minutes: ${JWT_TTL_MINUTES:480}
     secret: ${JWT_SECRET}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:4201,http://localhost:4202,http://localhost:4203,http://localhost:4204,http://localhost:4205}
   attachments:
     root-folder: ${ATTACHMENTS_ROOT_FOLDER:./attachments}
     max-file-size: ${ATTACHMENTS_MAX_FILE_SIZE:25MB}

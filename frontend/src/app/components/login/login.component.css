@@ -36,6 +36,34 @@
 }
 .brand-logotype { max-width: 280px; max-height: 64px; }
 
+.external-login-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: min(100%, 460px);
+  margin: 0 auto;
+  padding: 40px 16px;
+  text-align: center;
+}
+.external-logotype {
+  display: block;
+  width: min(100%, 360px);
+  max-height: 88px;
+  object-fit: contain;
+}
+.external-spinner {
+  color: var(--p-primary-600);
+  font-size: 36px;
+}
+.external-login-text {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+  line-height: 1.4;
+}
+.external-login-text b { font-weight: 700; }
+
 :host ::ng-deep .login-card { display: block; width: min(100%, 380px); margin: auto; }
 :host ::ng-deep .login-card .p-card-body { padding: 24px; }
 
@@ -55,5 +83,8 @@
   .brand-row { gap: 12px; min-height: 56px; }
   .internal-logo { max-width: 96px; max-height: 48px; padding-right: 12px; }
   .brand-logotype { max-width: 190px; max-height: 48px; }
+  .external-login-panel { gap: 18px; padding: 32px 8px; }
+  .external-logotype { max-height: 72px; }
+  .external-login-text { font-size: 16px; }
   :host ::ng-deep .login-card { width: 100%; }
 }

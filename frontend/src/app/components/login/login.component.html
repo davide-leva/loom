@@ -1,45 +1,59 @@
 <main class="login-page">
   <div class="login-content">
-    <div class="brand">
-      <div class="brand-row">
-        @if (internalBrand.logoUrl; as logoUrl) {
-          <img class="internal-logo" [src]="logoUrl" [alt]="'Logo ' + internalBrand.name" />
-        }
-        <img class="brand-logotype" [src]="loomLogotypeUrl" alt="Loom" />
+    @if (!externalLoginActive) {
+      <div class="brand">
+        <div class="brand-row">
+          @if (internalBrand.logoUrl; as logoUrl) {
+            <img class="internal-logo" [src]="logoUrl" [alt]="'Logo ' + internalBrand.name" />
+          }
+          <img class="brand-logotype" [src]="loomLogotypeUrl" alt="Loom" />
+        </div>
       </div>
-    </div>
+    }
 
-    <p-card styleClass="login-card">
-      <ng-template #header>
-        <div class="card-heading">
-          <h1>Benvenuto</h1>
-          <h2>Accedi</h2>
-        </div>
-      </ng-template>
-
-      <form (ngSubmit)="login()">
-        @if (loading && !username) {
-          <p>Verifica dell’accesso esterno in corso…</p>
+    @if (externalLoginActive) {
+      <section class="external-login-panel" aria-live="polite" aria-busy="true">
+        <img class="external-logotype" [src]="loomLogotypeUrl" alt="Loom" />
+        @if (!error) {
+          <i class="pi pi-spinner pi-spin external-spinner" aria-label="Accesso in corso"></i>
         }
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input pInputText id="username" name="username" type="text" [(ngModel)]="username"
-                 autocomplete="username" required autofocus />
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <p-password inputId="password" name="password" [(ngModel)]="password"
-                      [feedback]="false" [toggleMask]="true" [style]="{ width: '100%' }"
-                      [inputStyle]="{ width: '100%' }" />
-        </div>
+        <p class="external-login-text">
+          Accedendo come <b>{{ externalTokenSubject }}</b>
+        </p>
         @if (error) {
           <p class="error" role="alert">{{ error }}</p>
         }
-        <div class="actions">
-          <p-button type="submit" label="Accedi" [loading]="loading"
-                    [disabled]="!username.trim() || !password || loading" />
-        </div>
-      </form>
-    </p-card>
+      </section>
+    } @else {
+      <p-card styleClass="login-card">
+        <ng-template #header>
+          <div class="card-heading">
+            <h1>Benvenuto</h1>
+            <h2>Accedi</h2>
+          </div>
+        </ng-template>
+
+        <form (ngSubmit)="login()">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input pInputText id="username" name="username" type="text" [(ngModel)]="username"
+                   autocomplete="username" required autofocus />
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <p-password inputId="password" name="password" [(ngModel)]="password"
+                        [feedback]="false" [toggleMask]="true" [style]="{ width: '100%' }"
+                        [inputStyle]="{ width: '100%' }" />
+          </div>
+          @if (error) {
+            <p class="error" role="alert">{{ error }}</p>
+          }
+          <div class="actions">
+            <p-button type="submit" label="Accedi" [loading]="loading"
+                      [disabled]="!username.trim() || !password || loading" />
+          </div>
+        </form>
+      </p-card>
+    }
   </div>
 </main>
