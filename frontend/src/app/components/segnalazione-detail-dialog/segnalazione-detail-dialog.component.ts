@@ -83,6 +83,26 @@ import type { SegnalazioneAllegato, SegnalazioneCommento, SegnalazioneDettaglio,
             }
 
             <h3>Allegati</h3>
+            @if (uploadableAttachmentFields().length) {
+              <div class="attachment-upload-panel" aria-label="Carica nuovi allegati">
+                @for (field of uploadableAttachmentFields(); track field.id) {
+                  <div class="attachment-upload-field">
+                    <div>
+                      <strong>{{ field.label }}</strong>
+                      @if (field.description) { <small>{{ field.description }}</small> }
+                    </div>
+                    <label class="attachment-upload-button" [class.disabled]="isUploadingAttachment(field.id)">
+                      <input type="file" [multiple]="field.multiple" [disabled]="isUploadingAttachment(field.id)"
+                             (change)="uploadSelectedAttachments(field, $event)" />
+                      <i class="pi" [class.pi-spin]="isUploadingAttachment(field.id)"
+                         [class.pi-spinner]="isUploadingAttachment(field.id)"
+                         [class.pi-upload]="!isUploadingAttachment(field.id)"></i>
+                      <span>{{ isUploadingAttachment(field.id) ? 'Caricamento...' : 'Carica file' }}</span>
+                    </label>
+                  </div>
+                }
+              </div>
+            }
             @if (detail.attachments.length) {
               <ul class="attachments-grid">
                 @for (attachment of detail.attachments; track attachment.id) {
@@ -242,6 +262,7 @@ export class SegnalazioneDetailDialogComponent {
   private readonly attachmentPreviewUrls = new Map<number, string>();
   private readonly attachmentBlobs = new Map<number, Blob>();
   private readonly loadingAttachmentIds = new Set<number>();
+  private readonly uploadingAttachmentFieldIds = new Set<number>();
   private loadSequence = 0;
   private destroyed = false;
 
@@ -349,6 +370,41 @@ export class SegnalazioneDetailDialogComponent {
 
   canEditAnyField(): boolean {
     return this.editableFieldScopes().length > 0;
+  }
+
+  uploadableAttachmentFields(): SegnalazioneCampo[] {
+    const editableScopes = new Set(this.editableFieldScopes());
+    return this.projectFields.filter(field => field.type === 'ATTACHMENTS' && editableScopes.has(field.scope));
+  }
+
+  isUploadingAttachment(fieldId: number): boolean {
+    return this.uploadingAttachmentFieldIds.has(fieldId);
+  }
+
+  uploadSelectedAttachments(field: SegnalazioneCampo, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (!this.detail || files.length === 0 || this.isUploadingAttachment(field.id)) return;
+
+    const selectedFiles = field.multiple ? files : files.slice(-1);
+    this.uploadingAttachmentFieldIds.add(field.id);
+    this.error = '';
+    forkJoin(selectedFiles.map(file => this.segnalazioniApi.uploadAttachment(this.detail!.issue.id, field.id, file)))
+      .subscribe({
+        next: attachments => {
+          const currentAttachments = this.detail?.attachments ?? [];
+          const nextAttachments = [...currentAttachments, ...attachments]
+            .sort((a, b) => new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime() || a.id - b.id);
+          this.detail = this.detail ? { ...this.detail, attachments: nextAttachments } : this.detail;
+          this.syncAttachmentPreviews(nextAttachments);
+          this.uploadingAttachmentFieldIds.delete(field.id);
+        },
+        error: () => {
+          this.uploadingAttachmentFieldIds.delete(field.id);
+          this.error = 'Non riesco a caricare uno o piu allegati.';
+        }
+      });
   }
 
   showIssueActions(): boolean {

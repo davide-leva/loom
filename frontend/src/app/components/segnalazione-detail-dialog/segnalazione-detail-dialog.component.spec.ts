@@ -15,11 +15,13 @@ class SegnalazioniStub {
   private issueDetailStream$ = new Subject<SegnalazioneDettaglio>();
   segnalazioneDettaglio = jest.fn(() => this.issueDetailStream$.asObservable());
   issueFields$ = new Subject<SegnalazioneCampo[]>();
-  issueFields = jest.fn(() => this.issueFields$.asObservable());
+  segnalazioneCampi = jest.fn(() => this.issueFields$.asObservable());
   issueFieldOptions$ = new Subject<SegnalazioneCampoOpzione[]>();
-  issueFieldOptions = jest.fn(() => this.issueFieldOptions$.asObservable());
+  segnalazioneCampoOpzioni = jest.fn(() => this.issueFieldOptions$.asObservable());
   updateIssueValues$ = new Subject<SegnalazioneDettaglio>();
   updateIssueValues = jest.fn(() => this.updateIssueValues$.asObservable());
+  uploadAttachment$ = new Subject<SegnalazioneAllegato>();
+  uploadAttachment = jest.fn(() => this.uploadAttachment$.asObservable());
   approvaSegnalazione$ = new Subject<SegnalazioneSummary>();
   approvaSegnalazione = jest.fn(() => this.approvaSegnalazione$.asObservable());
   archiviaSegnalazione$ = new Subject<SegnalazioneSummary>();
@@ -433,6 +435,44 @@ describe('SegnalazioneDetailDialogComponent', () => {
       component.download(att);
       segnalazioniApi.downloadAttachment$.next(new Blob(['x']));
       expect(saveSpy).toHaveBeenCalled();
+    });
+
+    it('uploadSelectedAttachments() uploads selected files and appends returned attachments', () => {
+      component.detail = detail();
+      component.projectFields = [
+        { id: 10, projectId: 1, code: 'ATT', label: 'Allegati', description: null,
+          mandatory: false, multiple: true, type: 'ATTACHMENTS', scope: 'USER', hasValues: false }
+      ];
+      const file = new File(['hello'], 'hello.txt', { type: 'text/plain' });
+      const input = document.createElement('input');
+      Object.defineProperty(input, 'files', { value: [file] });
+
+      component.uploadSelectedAttachments(component.projectFields[0], { target: input } as unknown as Event);
+
+      expect(segnalazioniApi.uploadAttachment).toHaveBeenCalledWith(1, 10, file);
+      expect(component.isUploadingAttachment(10)).toBe(true);
+      const uploaded = { id: 99, issueId: 1, projectId: 1, definitionId: 10, originalName: 'hello.txt',
+        contentType: 'text/plain', fileSize: 5, uploadedAt: '2026-09-19T08:00:00.000Z',
+        userId: 1, username: 'mario' } as SegnalazioneAllegato;
+      segnalazioniApi.uploadAttachment$.next(uploaded);
+      segnalazioniApi.uploadAttachment$.complete();
+      expect(component.detail!.attachments).toEqual([uploaded]);
+      expect(component.isUploadingAttachment(10)).toBe(false);
+    });
+
+    it('uploadSelectedAttachments() reports upload failures', () => {
+      component.detail = detail();
+      const field = { id: 10, projectId: 1, code: 'ATT', label: 'Allegati', description: null,
+        mandatory: false, multiple: false, type: 'ATTACHMENTS', scope: 'USER', hasValues: false } as SegnalazioneCampo;
+      const file = new File(['hello'], 'hello.txt', { type: 'text/plain' });
+      const input = document.createElement('input');
+      Object.defineProperty(input, 'files', { value: [file] });
+
+      component.uploadSelectedAttachments(field, { target: input } as unknown as Event);
+      segnalazioniApi.uploadAttachment$.error(new Error('boom'));
+
+      expect(component.error).toBe('Non riesco a caricare uno o piu allegati.');
+      expect(component.isUploadingAttachment(10)).toBe(false);
     });
   });
 });

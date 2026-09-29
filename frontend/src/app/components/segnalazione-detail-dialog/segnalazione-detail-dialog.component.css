@@ -13,6 +13,15 @@ h3 { font-size: 15px; margin-top: 18px; }
 dt { font-size: 12px; color: #64748b; font-weight: 800; }
 dd { margin: 4px 0 0; color: #0f172a; }
 .attachments-grid { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.attachment-upload-panel { display: grid; gap: 10px; margin: 10px 0 12px; }
+.attachment-upload-field { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid #dbe4ee; border-radius: 8px; padding: 10px 12px; background: #fbfdff; }
+.attachment-upload-field div { display: grid; gap: 3px; min-width: 0; }
+.attachment-upload-field strong { color: var(--p-primary-700); font-size: 13px; }
+.attachment-upload-field small { color: #64748b; font-size: 12px; }
+.attachment-upload-button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; border: 1px solid var(--p-primary-600); border-radius: 6px; padding: 0 12px; background: var(--p-primary-600); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.attachment-upload-button:hover { background: var(--p-primary-700); border-color: var(--p-primary-700); }
+.attachment-upload-button.disabled { opacity: .68; cursor: wait; }
+.attachment-upload-button input { display: none; }
 .attachment-card { width: 100%; min-width: 0; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 12px; border: 1px solid #dbe4ee; border-radius: 12px; padding: 8px; background: #fff; color: #0f172a; text-align: left; cursor: pointer; }
 .attachment-card:hover { border-color: var(--p-primary-300); box-shadow: 0 5px 16px rgba(15, 23, 42, .08); }
 .attachment-card:focus-visible { outline: 2px solid var(--p-primary-500); outline-offset: 2px; }
@@ -37,7 +46,7 @@ textarea { width: 100%; resize: vertical; border: 1px solid #cbd5e1; border-radi
 .error-message { color: #b91c1c; font-weight: 700; }
 :host ::ng-deep .comment-form .p-button { width: 100%; }
 @media (max-width: 1100px) { .auto-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 900px) { .detail-grid, .values-list, .auto-fields, .attachments-grid { grid-template-columns: 1fr; } .comments-panel { border-left: 0; padding-left: 0; } }
+@media (max-width: 900px) { .detail-grid, .values-list, .auto-fields, .attachments-grid { grid-template-columns: 1fr; } .attachment-upload-field { align-items: stretch; flex-direction: column; } .attachment-upload-button { width: 100%; } .comments-panel { border-left: 0; padding-left: 0; } }
 
 .preview-viewer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .image-preview { display: flex; justify-content: center; align-items: center; min-height: 280px; max-height: 72vh; overflow: auto; background: #0f172a; border-radius: 12px; padding: 12px; }
