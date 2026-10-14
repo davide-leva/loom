@@ -21,7 +21,8 @@ const labels: Record<EventType, string> = {
   ISSUE_COMMENT_DELETED: 'Commento eliminato',
   ISSUE_ATTACHMENT_UPLOADED: 'Allegato caricato',
   ISSUE_VALUES_CHANGED: 'Campi aggiornati',
-  ISSUE_DELETED: 'Segnalazione eliminata'
+  ISSUE_DELETED: 'Segnalazione eliminata',
+  ISSUE_ARCHIVED: 'Segnalazione archiviata'
 };
 
 @Component({
@@ -43,6 +44,9 @@ const labels: Record<EventType, string> = {
       </div>
 
       @if (projects.currentProjectId()) {
+        <label>Visualizzazione
+          <p-select [options]="viewOptions" [(ngModel)]="view" (ngModelChange)="applyFilters()" optionLabel="label" optionValue="value" />
+        </label>
         <section class="filters" aria-label="Filtri eventi">
           <label><span>Tipo</span>
             <p-select [options]="typeOptions" [(ngModel)]="type" optionLabel="label" optionValue="value" appendTo="body" />
@@ -60,6 +64,33 @@ const labels: Record<EventType, string> = {
         </section>
 
         @if (error()) { <p class="error-message">{{ error() }}</p> }
+        @if (view === 'email') {
+          <div class="events-list" aria-live="polite">
+            @for (batch of batches(); track batch.id) {
+              <article class="email-batch">
+                <h3>Batch del {{ batch.attemptedAt | date:'dd/MM/yyyy HH:mm:ss' }}</h3>
+                <small>{{ batch.id }}</small>
+                @for (delivery of batch.deliveries; track $index) {
+                  <section class="email-delivery">
+                    <strong>{{ delivery.recipientEmail || 'Indirizzo email assente' }} · {{ deliveryStatus(delivery.status) }}</strong>
+                    @if (delivery.reason) { <p>{{ deliveryReason(delivery.reason) }}</p> }
+                    @if (delivery.deliveryId) { <small>Email {{ delivery.deliveryId }}</small> }
+                    @for (event of delivery.events; track event.id) {
+                      <p>
+                        @if (event.issueId && event.type !== 'ISSUE_DELETED' && event.type !== 'ISSUE_ARCHIVED') {
+                          <button type="button" class="link-segnalazione" (click)="segnalazioneSelezionataId = event.issueId">#{{ event.issueId }}</button>
+                        } @else { <span>#{{ event.issueId }}</span> }
+                        {{ event.issueTitle }} · {{ labels[event.type] }}
+                        <small>{{ event.eventDate | date:'dd/MM/yyyy HH:mm:ss' }}</small>
+                      </p>
+                      <p class="event-details">{{ event.data }}</p>
+                    }
+                  </section>
+                }
+              </article>
+            } @empty { @if (!loading()) { <p>Nessun batch email registrato. Lo storico viene raccolto dai prossimi invii.</p> } }
+          </div>
+        } @else {
         <div class="events-list" aria-live="polite">
           @for (event of items(); track event.id) {
             <article class="event-row" [class.segnalazione-interna]="event.internal">
@@ -82,6 +113,7 @@ const labels: Record<EventType, string> = {
             @if (!loading()) { <p class="empty-message">Nessun evento trovato.</p> }
           }
         </div>
+        }
         @if (total() > pageSize) {
           <div class="pagination">
             <span>{{ page() * pageSize + 1 }}–{{ Math.min((page() + 1) * pageSize, total()) }} di {{ total() }}</span>
@@ -106,6 +138,9 @@ export class EventsComponent {
   readonly Math = Math;
   readonly labels = labels;
   readonly pageSize = 25;
+  view: 'events' | 'email' = 'email';
+  readonly viewOptions = [{ label: 'Batch email', value: 'email' }, { label: 'Tutti gli eventi', value: 'events' }];
+  readonly batches = signal<import('../../shared/models/event.types').EmailBatch[]>([]);
   readonly items = signal<WorkspaceEvent[]>([]);
   readonly actors = signal<EventActor[]>([]);
   readonly total = signal(0);
@@ -140,6 +175,7 @@ export class EventsComponent {
       this.lastRevision = revision;
       if (projectChanged) {
         this.items.set([]);
+        this.batches.set([]);
         this.total.set(0);
         this.actors.set([]);
         this.clearFilters(false);
@@ -164,6 +200,16 @@ export class EventsComponent {
     this.error.set(null);
     const from = this.dateRange?.[0] ? this.startOfDay(this.dateRange[0]).toISOString() : undefined;
     const to = this.dateRange?.[1] ? this.dayAfter(this.dateRange[1]).toISOString() : undefined;
+    if (this.view === 'email') {
+      this.api.batches(projectId, { page: this.page(), size: this.pageSize, type: this.type ?? undefined, actorId: this.actorId ?? undefined, from, to }).subscribe({
+        next: result => {
+          if (requestId !== this.requestId || projectId !== this.projects.currentProjectId()) return;
+          this.batches.set(result.items); this.total.set(result.total); this.loading.set(false);
+        },
+        error: () => { if (requestId === this.requestId) { this.error.set('Non riesco a caricare i batch email.'); this.loading.set(false); } }
+      });
+      return;
+    }
     this.api.list(projectId, {
       page: this.page(), size: this.pageSize, type: this.type ?? undefined,
       actorId: this.actorId ?? undefined, from, to
@@ -190,6 +236,21 @@ export class EventsComponent {
     this.dateRange = null;
     this.page.set(0);
     if (reload) this.load();
+  }
+
+  deliveryStatus(status: string): string {
+    return ({ SENT: 'Inviata', SKIPPED: 'Saltata', DEFERRED: 'In attesa', FAILED: 'Invio fallito' } as Record<string, string>)[status] ?? status;
+  }
+
+  deliveryReason(reason: string): string {
+    return ({ DIGEST_WINDOW_EXPIRED: 'Evento oltre la finestra temporale di invio', MIN_EVENT_AGE: 'In attesa del tempo minimo prima dell’invio', EMPTY_EMAIL: 'Indirizzo email assente',
+      STATUS_RETURNED_TO_ORIGINAL: 'Lo stato è tornato al valore iniziale', COMMENTS_CANCELLED: 'I nuovi commenti sono stati annullati dalle eliminazioni', NO_RENDERABLE_CHANGES: 'Nessuna modifica rappresentabile: controllare tipo evento e dati nei log', NO_NET_CHANGES_AFTER_COLLAPSE: 'Nessuna modifica netta dopo il raggruppamento degli eventi',
+      INTERNAL_NOT_VISIBLE: 'Segnalazione interna non visibile', PROJECT_NOT_VISIBLE: 'Accesso al progetto non disponibile',
+      ISSUE_DELETED_OR_ARCHIVED: 'Segnalazione eliminata o archiviata', PROJECT_EMAIL_DISABLED: 'Email disattivate per il progetto',
+      GLOBAL_EMAIL_DISABLED: 'Email disattivate nelle preferenze globali', ONLY_OWN_ISSUES: 'Preferenza: solo le proprie segnalazioni',
+      NEW_ISSUES_DISABLED: 'Notifiche per nuove segnalazioni disattivate', COMMENTS_DISABLED: 'Notifiche per commenti disattivate',
+      STATUS_CHANGES_DISABLED: 'Notifiche per passaggi di stato disattivate', ONLY_RELEASED_STATUS: 'Preferenza: solo lo stato rilasciato',
+      DATA_CHANGES_DISABLED: 'Notifiche per modifiche ai dati disattivate' } as Record<string, string>)[reason] ?? reason;
   }
 
   icon(type: EventType): string {

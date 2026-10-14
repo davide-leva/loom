@@ -40,6 +40,30 @@ public class EventUserNotification {
     @Column(name = "notified_at")
     private Instant notifiedAt;
 
+    @Setter
+    @Column(name = "email_batch_id", length = 36)
+    private String emailBatchId;
+
+    @Setter
+    @Column(name = "email_delivery_id", length = 36)
+    private String emailDeliveryId;
+
+    @Setter
+    @Column(name = "delivery_status", length = 16)
+    private String deliveryStatus;
+
+    @Setter
+    @Column(name = "delivery_reason", length = 512)
+    private String deliveryReason;
+
+    @Setter
+    @Column(name = "recipient_email", length = 128)
+    private String recipientEmail;
+
+    @Setter
+    @Column(name = "attempted_at")
+    private Instant attemptedAt;
+
     public EventUserNotification(Event event, User user) {
         this.event = event;
         this.user = user;

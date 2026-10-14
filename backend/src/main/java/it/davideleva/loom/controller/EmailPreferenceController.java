@@ -35,8 +35,8 @@ public class EmailPreferenceController {
     private final ProjectUserRepository memberships;
 
     public record ProjectPreference(Long projectId, String projectName, Boolean wantEmail) {}
-    public record Output(Boolean globalWantEmail, List<ProjectPreference> projects) {}
-    public record Input(Boolean globalWantEmail, List<ProjectPreferenceInput> projects) {}
+    public record Output(Boolean globalWantEmail, List<ProjectPreference> projects, boolean onlyOwnIssues, boolean newIssues, it.davideleva.loom.domain.EmailStatusPreference statusChanges, boolean comments, boolean dataChanges) {}
+    public record Input(Boolean globalWantEmail, List<ProjectPreferenceInput> projects, Boolean onlyOwnIssues, Boolean newIssues, it.davideleva.loom.domain.EmailStatusPreference statusChanges, Boolean comments, Boolean dataChanges) {}
     public record ProjectPreferenceInput(Long projectId, Boolean wantEmail) {}
 
     @GetMapping
@@ -50,6 +50,11 @@ public class EmailPreferenceController {
     public Output update(@RequestBody Input input, JwtAuthenticationToken authentication) {
         User user = currentUser(authentication);
         user.setWantEmail(input.globalWantEmail());
+        if (input.onlyOwnIssues() != null) user.setEmailOnlyOwn(input.onlyOwnIssues());
+        if (input.newIssues() != null) user.setEmailNewIssues(input.newIssues());
+        if (input.statusChanges() != null) user.setEmailStatusChanges(input.statusChanges());
+        if (input.comments() != null) user.setEmailComments(input.comments());
+        if (input.dataChanges() != null) user.setEmailDataChanges(input.dataChanges());
         Map<Long, Project> visible = visibleProjects(user).stream()
             .collect(LinkedHashMap::new, (map, project) -> map.put(project.getId(), project), Map::putAll);
         if (input.projects() != null) {
@@ -70,7 +75,7 @@ public class EmailPreferenceController {
                 memberships.findById(new ProjectUserId(project.getId(), user.getId()))
                     .map(ProjectUser::getWantEmail).orElse(null)))
             .toList();
-        return new Output(user.getWantEmail(), projectPreferences);
+        return new Output(user.getWantEmail(), projectPreferences, user.isEmailOnlyOwn(), user.isEmailNewIssues(), user.getEmailStatusChanges(), user.isEmailComments(), user.isEmailDataChanges());
     }
 
     private List<Project> visibleProjects(User user) {

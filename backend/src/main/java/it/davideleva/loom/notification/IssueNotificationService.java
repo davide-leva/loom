@@ -43,6 +43,7 @@ public class IssueNotificationService {
                 events.unreadIssueIds(project.getId(), user.getId(), internalAllowed)).stream()
             .filter(issue -> issue.getProject().getId().equals(project.getId()))
             .filter(issue -> !issue.isInternal() || internalAllowed)
+            .filter(issue -> !issue.isDeleted() && !issue.isArchived())
             .map(issue -> new UnreadIssue(issue.getId(), issue.getIssueType()))
             .sorted(Comparator.comparing(UnreadIssue::issueId))
             .toList();

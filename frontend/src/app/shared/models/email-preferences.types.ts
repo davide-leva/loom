@@ -8,5 +8,10 @@ export interface ProjectEmailPreference {
 
 export interface EmailPreferences {
   globalWantEmail: boolean | null;
+  onlyOwnIssues?: boolean;
+  newIssues?: boolean;
+  statusChanges?: 'NONE' | 'RELEASED' | 'ALL';
+  comments?: boolean;
+  dataChanges?: boolean;
   projects: ProjectEmailPreference[];
 }

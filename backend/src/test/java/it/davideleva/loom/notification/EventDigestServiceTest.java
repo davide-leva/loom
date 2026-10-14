@@ -21,7 +21,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class EventDigestServiceTest {
 
-    private final EventDigestService service = new EventDigestService();
+    private final EventDigestService service = new EventDigestService(org.mockito.Mockito.mock(it.davideleva.loom.repository.ProjectUserRepository.class));
 
     // -------- helpers --------
 
@@ -60,6 +60,42 @@ class EventDigestServiceTest {
         ReflectionTestUtils.setField(event, "id", id);
         ReflectionTestUtils.setField(event, "eventDate", when);
         return event;
+    }
+
+    @Test
+    void explicitProjectMemberReceivesDigestAcrossCompanies() {
+        var memberships = org.mockito.Mockito.mock(it.davideleva.loom.repository.ProjectUserRepository.class);
+        ReflectionTestUtils.setField(service, "memberships", memberships);
+        Project project = project(10, company(100));
+        User recipient = user(2, Role.TEAM, company(999));
+        org.mockito.Mockito.when(memberships.existsById(new it.davideleva.loom.domain.ProjectUserId(10L, 2L))).thenReturn(true);
+        Event event = event(1, EventType.ISSUE_CREATED, issue(1, project), "");
+        assertNull(service.exclusionReason(recipient, event));
+        assertNotNull(service.buildDigest(recipient, List.of(event)));
+    }
+
+    @Test
+    void preferencesExcludeOnlySelectedEventCategories() {
+        Project project = project(10, company(100));
+        User recipient = user(2, Role.ADMIN, company(999));
+        Issue issue = issue(1, project);
+        issue.setIssuer(user(3, Role.USER, project.getCompany()));
+        Event created = event(1, EventType.ISSUE_CREATED, issue, "");
+        recipient.setEmailOnlyOwn(true);
+        assertEquals("ONLY_OWN_ISSUES", service.exclusionReason(recipient, created));
+        issue.setIssuer(recipient);
+        assertNull(service.exclusionReason(recipient, created));
+        recipient.setEmailNewIssues(false);
+        assertEquals("NEW_ISSUES_DISABLED", service.exclusionReason(recipient, created));
+        recipient.setEmailComments(false);
+        assertEquals("COMMENTS_DISABLED", service.exclusionReason(recipient, event(2, EventType.ISSUE_COMMENT_ADDED, issue, "")));
+        recipient.setEmailDataChanges(false);
+        assertEquals("DATA_CHANGES_DISABLED", service.exclusionReason(recipient, event(3, EventType.ISSUE_VALUES_CHANGED, issue, "")));
+        recipient.setEmailStatusChanges(it.davideleva.loom.domain.EmailStatusPreference.RELEASED);
+        assertEquals("ONLY_RELEASED_STATUS", service.exclusionReason(recipient, event(4, EventType.ISSUE_STATUS_CHANGED, issue, "REPORTED -> IN_PROGRESS")));
+        assertNull(service.exclusionReason(recipient, event(5, EventType.ISSUE_STATUS_CHANGED, issue, "COMPLETED->RELEASED")));
+        recipient.setEmailStatusChanges(it.davideleva.loom.domain.EmailStatusPreference.NONE);
+        assertEquals("STATUS_CHANGES_DISABLED", service.exclusionReason(recipient, event(6, EventType.ISSUE_APPROVED, issue, "RELEASED -> APPROVED")));
     }
 
     // -------- guards --------

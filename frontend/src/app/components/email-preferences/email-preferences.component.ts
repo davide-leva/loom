@@ -31,6 +31,14 @@ type TriState = boolean | null;
           </label>
         </section>
 
+        <section class="preference-section">
+          <label><span>Segnalazioni da ricevere</span><p-select [options]="scopeOptions" [(ngModel)]="preferences.onlyOwnIssues" optionLabel="label" optionValue="value" /></label>
+          <label><span>Nuove segnalazioni</span><p-select [options]="yesNo" [(ngModel)]="preferences.newIssues" optionLabel="label" optionValue="value" /></label>
+          <label><span>Passaggi di stato</span><p-select [options]="statusOptions" [(ngModel)]="preferences.statusChanges" optionLabel="label" optionValue="value" /></label>
+          <label><span>Nuovi commenti</span><p-select [options]="yesNo" [(ngModel)]="preferences.comments" optionLabel="label" optionValue="value" /></label>
+          <label><span>Modifiche ai dati e allegati</span><p-select [options]="yesNo" [(ngModel)]="preferences.dataChanges" optionLabel="label" optionValue="value" /></label>
+          <p>Le mie segnalazioni sono quelle create da me. Le preferenze si applicano ai progetti abilitati qui sotto.</p>
+        </section>
         <p-table [value]="preferences.projects" styleClass="p-datatable-sm">
           <ng-template pTemplate="header">
             <tr><th>Progetto</th><th>Notifiche progetto</th></tr>
@@ -73,6 +81,9 @@ export class EmailPreferencesComponent implements OnInit {
   message = '';
   error = '';
 
+  readonly yesNo = [{ label: 'Sì', value: true }, { label: 'No', value: false }];
+  readonly scopeOptions = [{ label: 'Tutte le segnalazioni', value: false }, { label: 'Solo le mie segnalazioni', value: true }];
+  readonly statusOptions = [{ label: 'Nessuno', value: 'NONE' }, { label: 'Solo rilasciato', value: 'RELEASED' }, { label: 'Tutti', value: 'ALL' }];
   readonly options: { label: string; value: TriState }[] = [
     { label: 'Default', value: null },
     { label: 'Si', value: true },

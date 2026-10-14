@@ -41,6 +41,7 @@ public class WorkspaceEventController {
     private final UserRepository users;
     private final ProjectUserRepository memberships;
     private final ApiLookup lookup;
+    private final it.davideleva.loom.repository.EmailNotificationAttemptRepository attempts;
 
     public record EventOutput(Long id, Instant eventDate, EventType type, String data,
                               Long issueId, String issueTitle, boolean internal,
@@ -76,6 +77,41 @@ public class WorkspaceEventController {
             event.isInternal(),
             event.getActor() == null ? null : event.getActor().getId(),
             event.getActor() == null ? null : event.getActor().getUsername())).getContent(), result.getTotalElements());
+    }
+
+    public record DeliveryOutput(String deliveryId, Long userId, String recipientEmail, String status, String reason, List<EventOutput> events) {}
+    public record BatchOutput(String id, Instant attemptedAt, List<DeliveryOutput> deliveries) {}
+    public record BatchPage(List<BatchOutput> items, long total) {}
+
+    @GetMapping("/email-batches")
+    public BatchPage emailBatches(@PathVariable Long projectId, @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "25") int size, @RequestParam(required = false) EventType type,
+        @RequestParam(required = false) Long actorId, @RequestParam(required = false) Instant from,
+        @RequestParam(required = false) Instant to, JwtAuthenticationToken authentication) {
+        authorizedUser(projectId, authentication);
+        if (page < 0 || size < 1 || size > 100 || (from != null && to != null && !from.isBefore(to)))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid event filters");
+        Page<String> batchIds = attempts.batches(projectId, type, actorId, from, to, PageRequest.of(page, size));
+        if (batchIds.isEmpty()) return new BatchPage(List.of(), batchIds.getTotalElements());
+        var rows = attempts.findByBatchIdInAndEvent_Project_IdOrderByAttemptedAtAscIdAsc(batchIds.getContent(), projectId);
+        List<BatchOutput> output = batchIds.stream().map(id -> {
+            var batchRows = rows.stream().filter(a -> a.getBatchId().equals(id)).toList();
+            var grouped = batchRows.stream().collect(java.util.stream.Collectors.groupingBy(
+                a -> a.getUserId() + ":" + a.getStatus() + ":" + a.getDeliveryId() + ":" + a.getReason(), java.util.LinkedHashMap::new, java.util.stream.Collectors.toList()));
+            var deliveries = grouped.values().stream().map(group -> {
+                var first = group.get(0);
+                return new DeliveryOutput(first.getDeliveryId(), first.getUserId(), first.getRecipientEmail(), first.getStatus(), first.getReason(),
+                    group.stream().map(a -> eventOutput(a.getEvent())).toList());
+            }).toList();
+            return new BatchOutput(id, batchRows.get(0).getAttemptedAt(), deliveries);
+        }).toList();
+        return new BatchPage(output, batchIds.getTotalElements());
+    }
+
+    private EventOutput eventOutput(Event event) {
+        return new EventOutput(event.getId(), event.getEventDate(), event.getType(), event.getData(), event.getIssueRefId(),
+            event.getIssue() == null ? null : event.getIssue().getTitle(), event.isInternal(),
+            event.getActor() == null ? null : event.getActor().getId(), event.getActor() == null ? null : event.getActor().getUsername());
     }
 
     @GetMapping("/actors")

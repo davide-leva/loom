@@ -58,6 +58,7 @@ public class EmailNotificationScheduler {
     private final BrandingService branding;
     private final EventDigestService digestService;
     private final UserRepository users;
+    private final it.davideleva.loom.repository.EmailNotificationAttemptRepository attempts;
 
     @Value("${app.notifications.email.from}")
     private String from;
@@ -84,6 +85,9 @@ public class EmailNotificationScheduler {
     @Transactional
     public void sendPendingNotifications() {
         Instant since = Instant.now().minus(digestWindow);
+        String batchId = java.util.UUID.randomUUID().toString();
+        notifications.findByNotifiedFalseAndEvent_EventDateLessThanEqual(since).forEach(n ->
+            recordOutcome(n, batchId, null, "SKIPPED", "DIGEST_WINDOW_EXPIRED", n.getUser().getEmail(), true));
         List<EventUserNotification> pending =
             notifications.findByNotifiedFalseAndEvent_EventDateAfterOrderByEvent_EventDateAsc(since);
         if (pending.isEmpty()) return;
@@ -99,7 +103,15 @@ public class EmailNotificationScheduler {
             User user = entry.getValue().get(0).getUser();
             // Eagerly load user — the collection above holds the proxy.
             user = users.findById(user.getId()).orElse(user);
-            List<Event> events = entry.getValue().stream()
+            final User recipient = user;
+            List<EventUserNotification> eligible = entry.getValue().stream().filter(n -> {
+                String reason = digestService.exclusionReason(recipient, n.getEvent());
+                if (reason == null) return true;
+                recordOutcome(n, batchId, null, "SKIPPED", reason, recipient.getEmail(), true);
+                return false;
+            }).toList();
+            if (eligible.isEmpty()) { skipped++; continue; }
+            List<Event> events = eligible.stream()
                 .map(EventUserNotification::getEvent)
                 .sorted(Comparator.comparingLong(Event::getId))
                 .toList();
@@ -108,7 +120,8 @@ public class EmailNotificationScheduler {
             if (youngest.isAfter(Instant.now().minus(minEventAge))) {
                 // Keep notified=false and skip; the next tick will retry.
                 deferred++;
-                log.debug("Email digest deferred: user={} youngestEvent={} minAge={}",
+                eligible.forEach(n -> recordOutcome(n, batchId, null, "DEFERRED", "MIN_EVENT_AGE", recipient.getEmail(), false));
+                log.info("Email digest deferred: user={} youngestEvent={} minAge={}",
                     user.getId(), youngest, minEventAge);
                 continue;
             }
@@ -117,18 +130,30 @@ public class EmailNotificationScheduler {
             if (digest == null) {
                 // Nothing visible after collapsing/permission filtering — mark these as
                 // delivered so we don't re-evaluate them on every tick.
-                entry.getValue().forEach(this::markNotified);
+                eligible.forEach(n -> recordOutcome(n, batchId, null, "SKIPPED", digestService.collapseReason(events, n.getEvent().getIssueRefId()), recipient.getEmail(), true));
+                log.info("Email digest skipped: batch={} user={} events={} reason=NO_NET_CHANGES_AFTER_COLLAPSE", batchId, user.getId(), events.stream().map(Event::getId).toList());
                 skipped++;
                 continue;
             }
 
             try {
+                if (recipient.getEmail() == null || recipient.getEmail().isBlank()) {
+                    eligible.forEach(n -> recordOutcome(n, batchId, null, "SKIPPED", "EMPTY_EMAIL", recipient.getEmail(), true));
+                    skipped++;
+                    continue;
+                }
+                java.util.Set<Long> deliveredIssues = digest.issues().stream().map(EmailDigest.IssueDigest::id).collect(java.util.stream.Collectors.toSet());
+                List<EventUserNotification> collapsed = eligible.stream().filter(n -> !deliveredIssues.contains(n.getEvent().getIssueRefId())).toList();
+                collapsed.forEach(n -> recordOutcome(n, batchId, null, "SKIPPED", digestService.collapseReason(events, n.getEvent().getIssueRefId()), recipient.getEmail(), true));
                 sendDigest(digest);
-                entry.getValue().forEach(this::markNotified);
+                String deliveryId = java.util.UUID.randomUUID().toString();
+                eligible.stream().filter(n -> deliveredIssues.contains(n.getEvent().getIssueRefId())).forEach(n -> recordOutcome(n, batchId, deliveryId, "SENT", null, recipient.getEmail(), true));
                 sent++;
                 log.info("Email digest sent: user={} issues={} window={}..{}",
                     user.getId(), digest.issues().size(), digest.oldestEvent(), digest.newestEvent());
             } catch (RuntimeException | MessagingException exception) {
+                String failure = exception.getClass().getSimpleName() + ": " + exception.getMessage();
+                eligible.stream().filter(n -> !n.isNotified()).forEach(n -> recordOutcome(n, batchId, null, "FAILED", failure.substring(0, Math.min(512, failure.length())), recipient.getEmail(), false));
                 log.warn("Email digest failed: user={} reason={}", user.getId(), exception.getMessage(), exception);
                 // Keep notified=false so the next scheduled run retries.
             }
@@ -147,8 +172,7 @@ public class EmailNotificationScheduler {
 
     private void sendDigest(EmailDigest digest) throws MessagingException {
         if (digest.user().email() == null || digest.user().email().isBlank()) {
-            log.info("Skipping digest for user={} because email is empty", digest.user().id());
-            return;
+            throw new IllegalArgumentException("Recipient email is empty");
         }
         var internal = companies.findFirstByTeamCompanyTrue().orElse(null);
         String brandName = internal == null ? "Loom" : internal.getName();
@@ -171,6 +195,18 @@ public class EmailNotificationScheduler {
             helper.addInline("loom-logo", LOOM_LOGO_RESOURCE);
         }
         mailSender.send(message);
+    }
+
+    private void recordOutcome(EventUserNotification n, String batch, String delivery, String status, String reason, String email, boolean completed) {
+        n.setEmailBatchId(batch);
+        n.setEmailDeliveryId(delivery);
+        n.setDeliveryStatus(status);
+        n.setDeliveryReason(reason);
+        n.setRecipientEmail(email);
+        n.setAttemptedAt(Instant.now());
+        if (completed) markNotified(n);
+        attempts.save(new it.davideleva.loom.domain.EmailNotificationAttempt(n));
+        log.info("Email notification outcome: batch={} delivery={} event={} user={} recipient={} status={} reason={}", batch, delivery, n.getEvent().getId(), n.getUser().getId(), email, status, reason);
     }
 
     private void markNotified(EventUserNotification notification) {

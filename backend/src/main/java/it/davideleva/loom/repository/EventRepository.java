@@ -13,7 +13,7 @@ public interface EventRepository extends JpaRepository<Event, Long>, JpaSpecific
     Optional<Event> findTopByIssueRefIdOrderByIdDesc(Long issueId);
 
     @Query("select distinct e.issueRefId from Event e where e.project.id = :projectId "
-        + "and e.issue is not null and e.issueRefId is not null "
+        + "and e.issue is not null and e.issueRefId is not null and e.issue.deletedAt is null and e.issue.archivedAt is null "
         + "and (:internalAllowed = true or e.internal = false) "
         + "and (e.actor is null or e.actor.id <> :userId) "
         + "and not exists (select v.id.issueId from IssueUserView v "

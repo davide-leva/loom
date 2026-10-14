@@ -51,7 +51,12 @@ public class EventService {
         long notificationsCreated = recipients(issue, modifiedScopes).values().stream()
             .filter(user -> actor == null || !user.getId().equals(actor.getId()))
             .filter(user -> !issue.isInternal() || user.getRole() == Role.ADMIN || user.getRole() == Role.TEAM)
-            .filter(user -> wantsEmail(user, issue.getProject()))
+            .filter(user -> {
+                String reason = !wantsEmail(user, issue.getProject()) ? "PROJECT_OR_GLOBAL_EMAIL_DISABLED"
+                    : EmailPreferencePolicy.exclusionReason(user, event);
+                if (reason != null) log.info("Email recipient excluded: event={} issue={} user={} reason={}", event.getId(), issue.getId(), user.getId(), reason);
+                return reason == null;
+            })
             .map(user -> new EventUserNotification(event, user))
             .peek(notifications::save)
             .count();

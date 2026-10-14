@@ -28,6 +28,15 @@ export class EventsService {
     });
   }
 
+  batches(projectId: number, filters: EventFilters): Observable<import('../../shared/models/event.types').EmailBatchPage> {
+    let params = new HttpParams().set('page', filters.page).set('size', filters.size);
+    if (filters.type) params = params.set('type', filters.type);
+    if (filters.actorId) params = params.set('actorId', filters.actorId);
+    if (filters.from) params = params.set('from', filters.from);
+    if (filters.to) params = params.set('to', filters.to);
+    return this.http.get<import('../../shared/models/event.types').EmailBatchPage>(`/api/work/projects/${projectId}/events/email-batches`, { headers: this.auth.authHeaders(), params });
+  }
+
   actors(projectId: number): Observable<EventActor[]> {
     return this.http.get<EventActor[]>(`/api/work/projects/${projectId}/events/actors`, {
       headers: this.auth.authHeaders()

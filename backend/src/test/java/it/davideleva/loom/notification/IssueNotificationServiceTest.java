@@ -316,6 +316,19 @@ class IssueNotificationServiceTest {
         assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
     }
 
+    @Test
+    void archivedAndDeletedIssuesNeverContributeToKanbanBadges() {
+        IssueNotificationService service = newService();
+        Scenario s = scenario(true);
+        Issue archived = makeIssue(s.project, 1, IssueType.ANOMALY, false);
+        archived.markArchived(Instant.now());
+        Issue deleted = makeIssue(s.project, 2, IssueType.IMPROVEMENT, false);
+        deleted.markDeleted(Instant.now());
+        when(events.unreadIssueIds(eq(s.project.getId()), eq(s.user.getId()), anyBoolean())).thenReturn(List.of(1L, 2L));
+        when(issues.findAllById(List.of(1L, 2L))).thenReturn(List.of(archived, deleted));
+        assertEquals(0, service.summary(s.project, s.user).total());
+    }
+
     // ---------- helpers ----------
 
     private Scenario scenario(boolean userIsAdmin) {

@@ -27,6 +27,9 @@ import tools.jackson.databind.json.JsonMapper;
 class WorkspaceEventIntegrationTest {
     @LocalServerPort int port;
     @Autowired JsonMapper json;
+    @Autowired it.davideleva.loom.repository.EventRepository eventRepository;
+    @Autowired it.davideleva.loom.repository.UserRepository userRepository;
+    @Autowired it.davideleva.loom.repository.EmailNotificationAttemptRepository attempts;
     private final HttpClient client = HttpClient.newHttpClient();
 
     @Test
@@ -34,6 +37,14 @@ class WorkspaceEventIntegrationTest {
         assertEquals(201, request("POST", "/api/setup", "{\"teamCompanyName\":\"Team\",\"username\":\"admin\","
             + "\"email\":\"admin@example.com\",\"password\":\"admin-password-123\"}", null).statusCode());
         String admin = login("admin", "admin-password-123");
+        var preferences = body(request("PUT", "/api/preferences/email",
+            "{\"globalWantEmail\":true,\"onlyOwnIssues\":true,\"newIssues\":false,\"statusChanges\":\"RELEASED\",\"comments\":false,\"dataChanges\":false,\"projects\":[]}", admin));
+        assertEquals("RELEASED", preferences.get("statusChanges").asText());
+        assertTrue(preferences.get("onlyOwnIssues").asBoolean());
+        assertTrue(!preferences.get("comments").asBoolean());
+        var savedPreferences = body(request("GET", "/api/preferences/email", null, admin));
+        assertTrue(!savedPreferences.get("newIssues").asBoolean());
+        assertTrue(!savedPreferences.get("dataChanges").asBoolean());
         long companyId = id(request("POST", "/api/companies", "{\"name\":\"Customer\"}", admin));
         long projectId = id(request("POST", "/api/projects", "{\"name\":\"Portal\",\"companyId\":" + companyId + "}", admin));
         long otherProjectId = id(request("POST", "/api/projects", "{\"name\":\"Other\"}", admin));
@@ -70,6 +81,22 @@ class WorkspaceEventIntegrationTest {
         assertEquals(0, body(request("GET", path + "?from=2099-01-01T00:00:00Z",
             null, admin)).get("total").asInt());
         assertEquals(1, body(request("GET", path + "?size=1", null, admin)).get("items").size());
+        var persisted = eventRepository.findById(adminEvents.get("items").get(0).get("id").asLong()).orElseThrow();
+        var recipient = userRepository.findById(teamId).orElseThrow();
+        var notification = new it.davideleva.loom.domain.EventUserNotification(persisted, recipient);
+        notification.setEmailBatchId("batch-test"); notification.setEmailDeliveryId("delivery-test");
+        notification.setRecipientEmail("historical@example.com"); notification.setDeliveryStatus("SENT");
+        notification.setAttemptedAt(java.time.Instant.now());
+        attempts.save(new it.davideleva.loom.domain.EmailNotificationAttempt(notification));
+        JsonNode batches = body(request("GET", path + "/email-batches", null, team));
+        assertEquals(1, batches.get("total").asInt());
+        var delivery = batches.get("items").get(0).get("deliveries").get(0);
+        assertEquals("historical@example.com", delivery.get("recipientEmail").asText());
+        assertEquals("SENT", delivery.get("status").asText());
+        assertEquals(1, delivery.get("events").size());
+        assertEquals(403, request("GET", path + "/email-batches", null, customer).statusCode());
+        assertEquals(0, body(request("GET", path + "/email-batches?type=ISSUE_APPROVED", null, team)).get("total").asInt());
+        assertEquals(0, body(request("GET", path + "/email-batches?from=2099-01-01T00:00:00Z", null, team)).get("total").asInt());
         long beforeDelete = adminEvents.get("items").get(0).get("id").asLong();
 
         assertEquals(204, request("DELETE", "/api/work/issues/" + publicIssue, null, admin).statusCode());

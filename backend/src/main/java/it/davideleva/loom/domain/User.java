@@ -53,6 +53,22 @@ public class User {
     @Column(name = "want_email")
     private Boolean wantEmail;
 
+    @Column(name = "email_only_own", nullable = false)
+    private boolean emailOnlyOwn;
+
+    @Column(name = "email_new_issues", nullable = false)
+    private boolean emailNewIssues = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "email_status_changes", nullable = false)
+    private EmailStatusPreference emailStatusChanges = EmailStatusPreference.ALL;
+
+    @Column(name = "email_comments", nullable = false)
+    private boolean emailComments = true;
+
+    @Column(name = "email_data_changes", nullable = false)
+    private boolean emailDataChanges = true;
+
     public User(String username, String email, String passwordHash, Role role, Company company) {
         this.username = username;
         this.email = email;

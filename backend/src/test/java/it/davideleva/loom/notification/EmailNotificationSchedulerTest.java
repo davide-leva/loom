@@ -49,20 +49,44 @@ class EmailNotificationSchedulerTest {
     @Mock CompanyRepository companies;
     @Mock BrandingService branding;
     @Mock UserRepository userRepository;
-    private final EventDigestService digestService = new EventDigestService();
+    private final EventDigestService digestService = new EventDigestService(org.mockito.Mockito.mock(it.davideleva.loom.repository.ProjectUserRepository.class));
 
     private EmailNotificationScheduler scheduler;
     private MimeMessage mime;
 
     @BeforeEach
     void setUp() {
-        scheduler = new EmailNotificationScheduler(notifications, mailSender, companies, branding, digestService, userRepository);
+        scheduler = new EmailNotificationScheduler(notifications, mailSender, companies, branding, digestService, userRepository, org.mockito.Mockito.mock(it.davideleva.loom.repository.EmailNotificationAttemptRepository.class));
         ReflectionTestUtils.setField(scheduler, "from", "noreply@example.com");
         ReflectionTestUtils.setField(scheduler, "minEventAge", java.time.Duration.ZERO);
         ReflectionTestUtils.setField(scheduler, "digestWindow", java.time.Duration.ofHours(48));
         mime = new jakarta.mail.internet.MimeMessage((jakarta.mail.Session) null);
         lenient().when(mailSender.createMimeMessage()).thenReturn(mime);
         lenient().when(userRepository.findById(any())).thenAnswer(invocation -> java.util.Optional.empty());
+    }
+
+    @Test
+    void emptyEmailIsSkippedWithSpecificReason() {
+        Scenario s = scenario();
+        var n = notification(s, 1L, "", s.event);
+        when(notifications.findByNotifiedFalseAndEvent_EventDateAfterOrderByEvent_EventDateAsc(any())).thenReturn(List.of(n));
+        scheduler.sendPendingNotifications();
+        assertTrue(n.isNotified());
+        assertEquals("SKIPPED", n.getDeliveryStatus());
+        assertEquals("EMPTY_EMAIL", n.getDeliveryReason());
+        verify(mailSender, never()).send(any(MimeMessage.class));
+    }
+
+    @Test
+    void expiredEventsAreFinalizedWithSpecificReason() {
+        Scenario s = scenario();
+        var n = notification(s, 1L, "alice@example.com", s.event);
+        when(notifications.findByNotifiedFalseAndEvent_EventDateLessThanEqual(any())).thenReturn(List.of(n));
+        when(notifications.findByNotifiedFalseAndEvent_EventDateAfterOrderByEvent_EventDateAsc(any())).thenReturn(List.of());
+        scheduler.sendPendingNotifications();
+        assertTrue(n.isNotified());
+        assertEquals("DIGEST_WINDOW_EXPIRED", n.getDeliveryReason());
+        verify(mailSender, never()).send(any(MimeMessage.class));
     }
 
     @Test

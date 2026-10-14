@@ -11,6 +11,8 @@ import type { EventActor, EventPage, EventType, WorkspaceEvent } from '../../sha
 class EventsStub {
   list$ = new Subject<EventPage>();
   list = jest.fn(() => this.list$.asObservable());
+  batches$ = new Subject<import('../../shared/models/event.types').EmailBatchPage>();
+  batches = jest.fn(() => this.batches$.asObservable());
   actors$ = new Subject<EventActor[]>();
   actors = jest.fn(() => this.actors$.asObservable());
 
@@ -51,7 +53,24 @@ describe('EventsComponent', () => {
 
     fixture = TestBed.createComponent(EventsComponent);
     component = fixture.componentInstance;
+    component.view = 'events';
     fixture.detectChanges();
+  });
+
+  it('groups batch emails with recipients and reasons', () => {
+    component.view = 'email';
+    currentProjectIdSignal.set(5);
+    fixture.detectChanges();
+    api.batches$.next({ items: [{ id: 'batch-1', attemptedAt: '2026-09-19T08:00:00Z', deliveries: [
+      { deliveryId: 'email-1', userId: 1, recipientEmail: 'mario@example.com', status: 'SENT', reason: null, events: [event({ id: 1 })] },
+      { deliveryId: null, userId: 2, recipientEmail: 'anna@example.com', status: 'SKIPPED', reason: 'COMMENTS_DISABLED', events: [event({ id: 2 })] }
+    ] }], total: 1 });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('mario@example.com');
+    expect(fixture.nativeElement.textContent).toContain('anna@example.com');
+    expect(fixture.nativeElement.textContent).toContain('Notifiche per commenti disattivate');
+    expect(component.batches().length).toBe(1);
+    expect(api.list).not.toHaveBeenCalled();
   });
 
   describe('actorOptions() and icon()', () => {

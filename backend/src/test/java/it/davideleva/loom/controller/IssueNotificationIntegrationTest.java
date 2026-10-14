@@ -70,6 +70,9 @@ class IssueNotificationIntegrationTest {
         assertEquals(0, categorized.get("planning").asInt());
         assertEquals(1, categorized.get("anomalies").asInt());
         assertEquals("ANOMALY", categorized.get("issues").get(0).get("issueType").asText());
+        assertEquals(204, request("DELETE", "/api/work/issues/" + issueId, null, admin).statusCode());
+        assertEquals(0, body(request("GET", notifications, null, customer)).get("total").asInt(),
+            "Soft-deleted issues must not leave an unread badge");
         assertEquals(403, request("GET", "/api/work/projects/" + otherProjectId + "/notifications",
             null, customer).statusCode());
     }

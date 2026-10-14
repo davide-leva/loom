@@ -48,7 +48,19 @@ import org.springframework.stereotype.Component;
  * </ul>
  */
 @Component
+@lombok.extern.slf4j.Slf4j
+@lombok.RequiredArgsConstructor
 public class EventDigestService {
+    private final it.davideleva.loom.repository.ProjectUserRepository memberships;
+
+    public String exclusionReason(User user, Event event) {
+        if (event.isInternal() && user.getRole() != Role.ADMIN && user.getRole() != Role.TEAM) return "INTERNAL_NOT_VISIBLE";
+        if (event.getProject() != null && !canSeeProject(user, event.getProject())) return "PROJECT_NOT_VISIBLE";
+        if (event.getIssue() != null && (event.getIssue().isDeleted() || event.getIssue().isArchived())) return "ISSUE_DELETED_OR_ARCHIVED";
+        if (event.getProject() != null && memberships.findById(new it.davideleva.loom.domain.ProjectUserId(event.getProject().getId(), user.getId()))
+            .map(m -> Boolean.FALSE.equals(m.getWantEmail())).orElse(false)) return "PROJECT_EMAIL_DISABLED";
+        return EmailPreferencePolicy.exclusionReason(user, event);
+    }
 
     /** Maximum number of comment previews included in the digest. */
     static final int COMMENT_PREVIEW_LIMIT = 3;
@@ -104,6 +116,18 @@ public class EventDigestService {
             oldest, newest, issueDigests);
     }
 
+    public String collapseReason(List<Event> events, Long issueId) {
+        var relevant = events.stream().filter(e -> java.util.Objects.equals(e.getIssueRefId(), issueId)).toList();
+        if (relevant.stream().anyMatch(e -> e.getType() == EventType.ISSUE_DELETED || e.getType() == EventType.ISSUE_ARCHIVED)) return "ISSUE_DELETED_OR_ARCHIVED";
+        var statuses = relevant.stream().filter(e -> e.getType() == EventType.ISSUE_STATUS_CHANGED)
+            .map(e -> StatusChange.parse(e.getData())).filter(java.util.Objects::nonNull).toList();
+        if (!statuses.isEmpty() && statuses.get(0).from() == statuses.get(statuses.size() - 1).to()) return "STATUS_RETURNED_TO_ORIGINAL";
+        long comments = relevant.stream().filter(e -> e.getType() == EventType.ISSUE_COMMENT_ADDED).count();
+        long deleted = relevant.stream().filter(e -> e.getType() == EventType.ISSUE_COMMENT_DELETED).count();
+        if (comments > 0 && comments <= deleted) return "COMMENTS_CANCELLED";
+        return "NO_RENDERABLE_CHANGES";
+    }
+
     private static String fullName(User user) {
         String first = user.getFirstName() == null ? "" : user.getFirstName().trim();
         String last = user.getLastName() == null ? "" : user.getLastName().trim();
@@ -126,6 +150,7 @@ public class EventDigestService {
             }
         }
         if ((deletedHere || archivedHere)) {
+            log.info("Email issue collapsed: user={} issue={} reason=DELETED_OR_ARCHIVED", user.getId(), issueId);
             // Created + deleted/archived within the window: nothing to report.
             return null;
         }
@@ -256,7 +281,10 @@ public class EventDigestService {
             items.add(new EmailDigest.Archived(reason));
         }
 
-        if (items.isEmpty()) return null;
+        if (items.isEmpty()) {
+            log.info("Email issue collapsed: user={} issue={} events={} reason=NO_NET_CHANGES_OR_UNSUPPORTED_PAYLOAD", user.getId(), issueId, events.stream().map(Event::getId).toList());
+            return null;
+        }
 
         return new EmailDigest.IssueDigest(
             issueId,
@@ -278,7 +306,8 @@ public class EventDigestService {
 
     private boolean canSeeProject(User user, Project project) {
         if (user.getRole() == Role.ADMIN) return true;
-        return ProjectMembershipPolicy.isAutomaticCompanyMember(project, user);
+        return ProjectMembershipPolicy.isAutomaticCompanyMember(project, user)
+            || (memberships.existsById(new it.davideleva.loom.domain.ProjectUserId(project.getId(), user.getId())));
     }
 
     /** Parsed form of an {@code ISSUE_STATUS_CHANGED} event's payload. */
@@ -308,7 +337,7 @@ public class EventDigestService {
             }
             int sep = arrow;
             String head = normalized.substring(0, sep).trim();
-            String tail = normalized.substring(sep + " -> ".length()).trim();
+            String tail = normalized.substring(normalized.indexOf("->", sep) + 2).trim();
             // Strip "Stato:" or "Stato: " prefix from the human-readable line.
             if (head.regionMatches(true, 0, "stato:", 0, 6)) head = head.substring(6).trim();
             head = enumValueFor(head);

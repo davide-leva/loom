@@ -8,5 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface EventUserNotificationRepository extends JpaRepository<EventUserNotification, EventUserNotificationId> {
     List<EventUserNotification> findByNotifiedFalseAndEvent_EventDateAfterOrderByEvent_EventDateAsc(Instant after);
+    List<EventUserNotification> findByNotifiedFalseAndEvent_EventDateLessThanEqual(Instant before);
     long countByNotifiedFalseAndEvent_EventDateAfter(Instant after);
 }

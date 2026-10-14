@@ -26,3 +26,7 @@ h1 { margin: 0; color: var(--p-primary-700); font-size: 24px; }
 .empty-message { padding: 24px 0; color: #64748b; }
 @media (max-width: 1000px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .page-title { flex-direction: column; } .filters { grid-template-columns: 1fr; } }
+
+.email-batch { border: 1px solid #dbe7f3; border-radius: 12px; padding: 18px; margin: 16px 0; }
+.email-delivery { border-top: 1px solid #e2e8f0; padding: 14px 0; margin-top: 12px; }
+.email-delivery small { display: block; color: #64748b; }
