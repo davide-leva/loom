@@ -27,13 +27,16 @@ test('new issues appear live for another connected user', async ({ browser, base
   try {
     await login(adminPage, adminUsername, adminPassword);
     await login(customerPage, customerUsername, customerPassword);
+    await customerPage.getByRole('button', { name: 'Salta', exact: true }).click();
     await selectProject(adminPage, project.name);
     await selectProject(customerPage, project.name);
 
-    await expect(customerPage.getByRole('status')).toContainText('Live');
+    await expect(customerPage.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
     await adminPage.getByRole('button', { name: /Nuova segnalazione/i }).click();
-    await adminPage.getByLabel('Titolo').fill(`Issue live ${suffix}`);
-    await adminPage.getByLabel('Descrizione').fill('Creata da e2e per verificare il websocket.');
+    await adminPage.getByPlaceholder('Titolo della segnalazione', { exact: true }).fill(`Issue live ${suffix}`);
+    await adminPage.getByPlaceholder('Descrizione dettagliata della richiesta o anomalia.', { exact: true })
+      .fill('Creata da e2e per verificare il websocket.');
+    await adminPage.getByRole('dialog').getByRole('checkbox').uncheck();
     await adminPage.getByRole('button', { name: /Crea segnalazione/i }).click();
 
     await expect(customerPage.getByText(`Issue live ${suffix}`)).toBeVisible();
@@ -84,7 +87,7 @@ async function login(page: Page, username: string, password: string): Promise<vo
 }
 
 async function selectProject(page: Page, projectName: string): Promise<void> {
-  await page.getByLabel('Progetto').click();
+  await page.getByRole('banner').getByRole('combobox').click();
   await page.getByRole('option', { name: projectName }).click();
   await expect(page.getByText(`Segnalazioni del progetto ${projectName}`)).toBeVisible();
 }
