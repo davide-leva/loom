@@ -230,6 +230,9 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
+Run the complete backend test suite with `cd backend && mvn verify` using Java 21 and Docker.
+The PostgreSQL regression tests use Testcontainers to start and clean up an isolated PostgreSQL 16 database.
+
 Frontend:
 
 ```bash
