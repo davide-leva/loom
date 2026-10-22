@@ -660,7 +660,7 @@ public class WorkspaceIssueController {
         for (Long id : payload.ids()) {
             Issue issue = lookup.issue(id);
             requireVisibleProject(issue.getProject(), user);
-            deleteAttachmentFiles(issue);
+            deleteAttachments(issue);
             eventService.detachIssue(id);
             issues.delete(issue);
             log.info("Issue permanently deleted: project={} issue={} actor={}",
@@ -668,8 +668,10 @@ public class WorkspaceIssueController {
         }
     }
 
-    private void deleteAttachmentFiles(Issue issue) {
+    private void deleteAttachments(Issue issue) {
         for (IssueAttachment attachment : attachments.findByIssue_IdOrderByUploadedAtAscIdAsc(issue.getId())) {
+            // Remove loaded entities too: database cascades alone leave managed references to the deleted issue.
+            attachments.delete(attachment);
             if (attachment.getStoredPath() == null) continue;
             try {
                 Files.deleteIfExists(Paths.get(attachment.getStoredPath()));

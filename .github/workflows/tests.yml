@@ -1,0 +1,109 @@
+name: Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Run complete backend suite
+        working-directory: backend
+        run: mvn --batch-mode --no-transfer-progress verify
+
+  frontend:
+    name: Frontend unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run complete frontend unit suite
+        run: npm test -- --ci --runInBand
+
+  e2e:
+    name: Frontend end-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: loom
+          POSTGRES_USER: loom
+          POSTGRES_PASSWORD: loom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U loom -d loom"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/loom
+      DB_USER: loom
+      DB_PASSWORD: loom
+      JWT_SECRET: ci-only-secret-0123456789abcdef0123456789abcdef
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Start backend
+        working-directory: backend
+        run: |
+          nohup mvn --batch-mode --no-transfer-progress spring-boot:run > "$RUNNER_TEMP/backend.log" 2>&1 &
+          for attempt in {1..240}; do
+            if curl --fail --silent http://localhost:8080/api/setup/status > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/backend.log"
+          exit 1
+      - name: Run complete frontend end-to-end suite
+        working-directory: frontend
+        run: npm run e2e
+      - name: Upload end-to-end diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-diagnostics
+          path: |
+            frontend/test-results/
+            ${{ runner.temp }}/backend.log
+          retention-days: 7
