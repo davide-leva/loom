@@ -47,6 +47,60 @@ test('new issues appear live for another connected user', async ({ browser, base
   }
 });
 
+test('an admin can be assigned, filtered and unassigned as a developer', async ({ page, baseURL }) => {
+  const api = await request.newContext({ baseURL });
+  try {
+    const token = await ensureAdmin(api);
+    const suffix = Date.now();
+    const project = await post(api, '/api/projects', token, { name: `Admin assignment ${suffix}` });
+    const issue = await post(api, '/api/work/issues', token, {
+      projectId: project.id, title: `Admin ticket ${suffix}`, description: 'Admin developer assignment'
+    });
+    const me = await api.get('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } });
+    expect(me.ok()).toBeTruthy();
+    const admin = await me.json();
+    const categorized = await api.patch(`/api/work/issues/${issue.id}/planning`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { issueType: 'ANOMALY', devUserId: null }
+    });
+    expect(categorized.ok(), await categorized.text()).toBeTruthy();
+
+    await login(page, adminUsername, adminPassword);
+    await selectProject(page, project.name);
+    await page.goto('/pianificazione');
+    const ticket = page.locator('.planning-card-item').filter({ hasText: issue.title });
+    await ticket.getByRole('combobox').click();
+    await page.getByRole('option', { name: adminUsername, exact: true }).click();
+    await expect(ticket.getByRole('combobox')).toContainText(adminUsername);
+    await expect.poll(async () => {
+      const detail = await api.get(`/api/work/issues/${issue.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return (await detail.json()).issue.devUserId;
+    }).toBe(admin.id);
+
+    await page.goto('/anomalie');
+    await page.locator('label').filter({ has: page.locator('span', { hasText: /^Sviluppatore$/ }) })
+      .getByRole('combobox').click();
+    await page.getByRole('option', { name: adminUsername, exact: true }).click();
+    await expect(page.getByText(issue.title, { exact: true })).toBeVisible();
+
+    await page.goto('/pianificazione');
+    await ticket.getByRole('combobox').click();
+    await page.getByRole('option', { name: 'Non assegnato', exact: true }).click();
+    await expect.poll(async () => {
+      const detail = await api.get(`/api/work/issues/${issue.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return (await detail.json()).issue.devUserId;
+    }).toBeNull();
+    const stillAdmin = await api.get('/api/users', { headers: { Authorization: `Bearer ${token}` } });
+    expect(stillAdmin.ok()).toBeTruthy();
+  } finally {
+    await api.dispose();
+  }
+});
+
 async function ensureAdmin(api: APIRequestContext): Promise<string> {
   const setupStatus = await api.get('/api/setup/status');
   expect(setupStatus.ok()).toBeTruthy();

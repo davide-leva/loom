@@ -137,7 +137,7 @@ export class ReportSegnalazioniDialogComponent {
   }
 
   developerOptions(): Option<AssignmentFilter>[] {
-    return this.userOptions(this.users.filter(user => user.role === 'TEAM'));
+    return this.userOptions(this.users.filter(user => user.role === 'TEAM' || user.role === 'ADMIN'));
   }
 
   generate(): void {

@@ -111,7 +111,7 @@ describe('SegnalazioniBoardComponent', () => {
       expect(opts.length).toBe(4);
     });
 
-    it('developerOptions() filters users by role TEAM', () => {
+    it('developerOptions() includes TEAM and ADMIN users', () => {
       component.users.set([
         { id: 1, username: 'mario', firstName: null, lastName: null, role: 'USER' },
         { id: 2, username: 'team1', firstName: 'T', lastName: 'One', role: 'TEAM' },
@@ -119,10 +119,8 @@ describe('SegnalazioniBoardComponent', () => {
       ]);
       const opts = component.developerOptions();
       const labels = opts.map(o => o.label);
-      // developers excludes USER role, but Admin and TEAM are kept? Let's check.
-      // Actually the filter keeps only role === 'TEAM' exactly
-      expect(opts.length).toBe(3); // ALL + NONE + only team1
-      expect(labels).toEqual(['Tutti', 'Non assegnato', 'T One']);
+      expect(opts.map(o => o.value)).toEqual(['ALL', 'NONE', 2, 3]);
+      expect(labels).toEqual(['Tutti', 'Non assegnato', 'T One', 'admin']);
     });
   });
 
