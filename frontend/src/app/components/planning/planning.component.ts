@@ -144,7 +144,7 @@ export class PlanningComponent {
         this.users.set(users);
         this.developerOptions = [
           { label: 'Non assegnato', value: null },
-          ...users.filter(user => user.role === 'TEAM').map(user => ({ label: this.userLabel(user), value: user.id }))
+          ...users.filter(user => user.role === 'TEAM' || user.role === 'ADMIN').map(user => ({ label: this.userLabel(user), value: user.id }))
         ];
         this.loading.set(false);
       },

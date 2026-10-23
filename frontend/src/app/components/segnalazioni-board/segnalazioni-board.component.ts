@@ -210,7 +210,7 @@ export class SegnalazioniBoardComponent {
   readonly title = computed(() => this.route.snapshot.data['title'] as string);
 
   readonly issuerOptions = computed<SelectOption<number | 'ALL' | 'NONE'>[]>(() => this.userOptions('Tutti'));
-  readonly developerOptions = computed<SelectOption<number | 'ALL' | 'NONE'>[]>(() => this.userOptions('Tutti', 'TEAM'));
+  readonly developerOptions = computed<SelectOption<number | 'ALL' | 'NONE'>[]>(() => this.userOptions('Tutti', ['TEAM', 'ADMIN']));
 
   segnalazioniFiltrate(): SegnalazioneSummary[] {
     return filtraSegnalazioni(this.segnalazioni(), {
@@ -441,8 +441,8 @@ export class SegnalazioniBoardComponent {
     this.resetFilters();
   }
 
-  private userOptions(allLabel: string, role?: ProjectUserSummary['role']): SelectOption<number | 'ALL' | 'NONE'>[] {
-    const users = role ? this.users().filter(user => user.role === role) : this.users();
+  private userOptions(allLabel: string, roles?: ProjectUserSummary['role'][]): SelectOption<number | 'ALL' | 'NONE'>[] {
+    const users = roles ? this.users().filter(user => roles.includes(user.role)) : this.users();
     return [
       { label: allLabel, value: 'ALL' },
       { label: 'Non assegnato', value: 'NONE' },

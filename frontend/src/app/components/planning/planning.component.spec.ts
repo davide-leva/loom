@@ -119,10 +119,9 @@ describe('PlanningComponent', () => {
 
       expect(component.developerOptions[0]).toEqual({ label: 'Non assegnato', value: null });
       const labels = component.developerOptions.map(o => o.label);
-      // TEAM users get formatted as "username · Full Name"; ADMIN appears as "name" only (no role TEAM)
       expect(labels).toContain('mario · Mario Rossi');
       expect(labels).not.toContain('anna');
-      expect(labels).not.toContain('admin');
+      expect(labels).toContain('admin');
     });
   });
 

@@ -292,6 +292,7 @@ public class WorkspaceIssueController {
         requireVisibleProject(project, currentUser(authentication));
 
         Map<Long, User> members = new LinkedHashMap<>();
+        users.findByRole(Role.ADMIN).forEach(user -> members.put(user.getId(), user));
         if (project.getCompany() != null) {
             users.findByCompany_Id(project.getCompany().getId()).forEach(user -> members.put(user.getId(), user));
         }
@@ -711,7 +712,7 @@ public class WorkspaceIssueController {
         Issue issue = lookup.issue(issueId);
         IssueType previousType = issue.getIssueType();
         User previousDeveloper = issue.getDeveloper();
-        User nextDeveloper = teamParticipant(issue.getProject(), input.devUserId());
+        User nextDeveloper = developerParticipant(issue.getProject(), input.devUserId());
         issue.setIssueType(input.issueType());
         issue.setDeveloper(nextDeveloper);
         List<String> changes = new ArrayList<>();
@@ -944,11 +945,11 @@ public class WorkspaceIssueController {
         }
     }
 
-    private User teamParticipant(Project project, Long userId) {
+    private User developerParticipant(Project project, Long userId) {
         if (userId == null) return null;
         User user = lookup.user(userId);
-        if (user.getRole() != Role.TEAM) {
-            throw ApiLookup.badRequest("Developer must be a TEAM user");
+        if (!isInternalUser(user)) {
+            throw ApiLookup.badRequest("Developer must be a TEAM or ADMIN user");
         }
         boolean explicitMember = memberships.existsById(new ProjectUserId(project.getId(), userId));
         ProjectMembershipPolicy.requireParticipant(project, user, explicitMember);

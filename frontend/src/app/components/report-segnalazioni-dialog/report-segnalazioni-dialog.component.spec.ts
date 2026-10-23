@@ -67,13 +67,19 @@ describe('ReportSegnalazioniDialogComponent', () => {
       expect(opts.find(o => o.value === 2)?.label).toBe('anna');
     });
 
-    it('developerOptions() filters users by TEAM role', () => {
+    it('developerOptions() includes TEAM and ADMIN users', () => {
+      component.users = [...users,
+        { id: 3, username: 'admin', firstName: null, lastName: null, role: 'ADMIN' },
+        { id: 4, username: 'customer-admin', firstName: null, lastName: null, role: 'SUPERUSER' }
+      ];
       const opts = component.developerOptions();
       const values = opts.map(o => o.value);
       expect(values).toContain('ALL');
       expect(values).toContain('NONE');
       expect(values).toContain(1);
       expect(values).not.toContain(2);
+      expect(values).toContain(3);
+      expect(values).not.toContain(4);
     });
 
     it('canSeeVisibility(): ADMIN/TEAM see it, USER/SUPERUSER do not', () => {
