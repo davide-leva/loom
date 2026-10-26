@@ -565,7 +565,7 @@ Riapertura della URL `?t=…` con token aggiornato → ripete 4.7.
 | Da → A                | USER/SUPERUSER | TEAM/ADMIN                               |
 | --------------------- | -------------- | ---------------------------------------- |
 | non-APPROVED → qualsiasi stato | ❌ errore "Solo il team o un admin può cambiare lo stato" | ✅ aggiorna `PATCH /api/work/issues/{id}/status` |
-| → `APPROVED`          | ❌             | solo se issue è `RELEASED` e (SUPERUSER **o** ADMIN su issue `internal`) → `POST /api/work/issues/{id}/approval` |
+| → `APPROVED` (dal dettaglio, `PATCH /api/work/issues/{id}/approval`) | solo da `RELEASED`: USER per le proprie issue; SUPERUSER per quelle visibili | solo da `RELEASED`: ADMIN su issue `internal`; TEAM non consentito |
 
 ### 16.3 Aggiornamento ottimistico
 
@@ -645,7 +645,7 @@ Riapertura della URL `?t=…` con token aggiornato → ripete 4.7.
 | Bottone      | Visibilità                              | Effetto                                       |
 | ------------ | --------------------------------------- | --------------------------------------------- |
 | Salva campi team | TEAM/ADMIN e TEAM fields presenti | §18.3                                      |
-| Approva      | SUPERUSER sempre (se `RELEASED`); ADMIN solo se `internal && RELEASED` | §22 |
+| Approva      | Solo se `RELEASED`: SUPERUSER, ADMIN su `internal`, USER sulle proprie issue | §22 |
 | Archivia     | ADMIN + status `APPROVED`               | §23                                            |
 | Elimina issue | ADMIN sempre; altrimenti segnalatore entro 10 minuti | §25 |
 
@@ -745,6 +745,8 @@ Riapertura della URL `?t=…` con token aggiornato → ripete 4.7.
 - Autorizzato:
   - **SUPERUSER**: sempre.
   - **ADMIN**: solo se l'issue è `internal`.
+  - **USER**: solo se è il segnalatore della issue.
+  - Restano necessari accesso al progetto e visibilità della issue.
   - Tutti gli altri: 403.
 
 ### 22.3 Effetti
@@ -1016,7 +1018,7 @@ Riapertura della URL `?t=…` con token aggiornato → ripete 4.7.
 | Creare issue "internal"                                                                | –    | –         | ✅   | ✅    |
 | Cambiare stato via Kanban (escluso `APPROVED`)                                        | –    | –         | ✅   | ✅    |
 | Spostare in `APPROVED`                                                                 | –    | –         | –    | solo su `internal` |
-| Approvazione diretta (bottone/endpoint)                                               | –    | ✅ (sempre) | –  | solo `internal` |
+| Approvazione diretta (bottone/endpoint, solo da `RELEASED`)                            | solo proprie | ✅ | – | solo `internal` |
 | Salvare valori TEAM-scope                                                              | –    | –         | ✅   | ✅    |
 | Salvare valori SUPERUSER-scope                                                         | –    | ✅        | ✅ (vedi internals) | ✅ |
 | Aggiungere commento                                                                    | ✅   | ✅        | ✅   | ✅    |

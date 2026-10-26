@@ -170,7 +170,7 @@ describe('SegnalazioneDetailDialogComponent', () => {
       segnalazioniApi.completeDetail();
     });
 
-    it('canApprove(): only RELEASED + (SUPERUSER or internal ADMIN)', () => {
+    it('canApprove(): preserves SUPERUSER and internal ADMIN rules', () => {
       component.detail = detail({ status: 'IN_PROGRESS' });
       userSignal.set(userOf('SUPERUSER'));
       expect(component.canApprove()).toBe(false);
@@ -186,6 +186,23 @@ describe('SegnalazioneDetailDialogComponent', () => {
       userSignal.set(userOf('SUPERUSER'));
       component.detail = detail({ status: 'RELEASED', internal: false });
       expect(component.canApprove()).toBe(true);
+    });
+
+    it('canApprove(): USER can approve only their own released issues', () => {
+      userSignal.set(userOf('USER', 12));
+      component.detail = detail({ status: 'RELEASED', issuerUserId: 12 });
+      expect(component.canApprove()).toBe(true);
+      component.detail = detail({ status: 'RELEASED', issuerUserId: 13 });
+      expect(component.canApprove()).toBe(false);
+      component.detail = detail({ status: 'RELEASED', issuerUserId: null });
+      expect(component.canApprove()).toBe(false);
+      component.detail = detail({ status: 'COMPLETED', issuerUserId: 12 });
+      expect(component.canApprove()).toBe(false);
+      component.detail = detail({ status: 'APPROVED', issuerUserId: 12 });
+      expect(component.canApprove()).toBe(false);
+      userSignal.set(userOf('TEAM', 12));
+      component.detail = detail({ status: 'RELEASED', issuerUserId: 12 });
+      expect(component.canApprove()).toBe(false);
     });
 
     it('canArchive(): only ADMIN and APPROVED', () => {

@@ -325,7 +325,7 @@ Stati principali:
 - Rilasciato;
 - Approvato.
 
-Il passaggio ad “Approvato” non può essere fatto dalla kanban: lo può fare solo un `SUPERUSER` dal dettaglio della issue quando lo stato è “Rilasciato”. Una issue già approvata può essere spostata indietro dalla kanban.
+Il passaggio ad “Approvato” si effettua dal dettaglio quando lo stato è “Rilasciato”: è consentito a un `SUPERUSER`, a un `ADMIN` per le issue interne e a un `USER` per le proprie issue. Restano necessari l’accesso al progetto e la visibilità della issue. Una issue già approvata può essere spostata indietro dalla kanban dai ruoli autorizzati.
 
 Tipologie:
 
