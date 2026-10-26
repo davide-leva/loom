@@ -503,9 +503,11 @@ public class WorkspaceIssueController {
     private IssueOutput approve(Issue issue, User user) {
         boolean superuser = user.getRole() == Role.SUPERUSER;
         boolean adminOnInternal = user.getRole() == Role.ADMIN && issue.isInternal();
-        if (!superuser && !adminOnInternal) {
+        boolean userOnOwnIssue = user.getRole() == Role.USER && issue.getIssuer() != null
+            && user.getId().equals(issue.getIssuer().getId());
+        if (!superuser && !adminOnInternal && !userOnOwnIssue) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "SUPERUSER role required, or ADMIN for internal issues");
+                "Approval requires SUPERUSER, ADMIN for internal issues, or USER for own issues");
         }
         if (issue.getStatus() != IssueStatus.RELEASED) {
             throw ApiLookup.badRequest("Only released issues can be approved");

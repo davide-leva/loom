@@ -359,6 +359,7 @@ export class SegnalazioneDetailDialogComponent {
     const segnalazione = this.detail?.issue;
     if (!segnalazione || segnalazione.status !== 'RELEASED') return false;
     if (role === 'SUPERUSER') return true;
+    if (role === 'USER') return segnalazione.issuerUserId === this.auth.user()?.id;
     return role === 'ADMIN' && segnalazione.internal;
   }
 
