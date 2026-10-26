@@ -101,6 +101,60 @@ test('an admin can be assigned, filtered and unassigned as a developer', async (
   }
 });
 
+test('a USER can approve only their own released issues', async ({ page, baseURL }) => {
+  const api = await request.newContext({ baseURL });
+  try {
+    const admin = await ensureAdmin(api);
+    const suffix = Date.now();
+    const company = await post(api, '/api/companies', admin, { name: `Approval customer ${suffix}` });
+    const project = await post(api, '/api/projects', admin, { name: `Approvals ${suffix}`, companyId: company.id });
+    const username = `approval-user-${suffix}`;
+    const password = 'approval-user-password-123';
+    const user = await post(api, '/api/users', admin, {
+      username, password, email: `${username}@example.com`, role: 'USER', companyId: company.id
+    });
+    const loginResponse = await api.post('/api/auth/login', { data: { username, password } });
+    expect(loginResponse.ok()).toBeTruthy();
+    const token = (await loginResponse.json()).accessToken;
+    const ownIssue = await post(api, '/api/work/issues', token, {
+      projectId: project.id, title: `Own approval ${suffix}`, description: 'Reported by USER'
+    });
+    const otherIssue = await post(api, '/api/work/issues', admin, {
+      projectId: project.id, title: `Other approval ${suffix}`, description: 'Reported by another user'
+    });
+    for (const issue of [ownIssue, otherIssue]) {
+      const released = await api.patch(`/api/work/issues/${issue.id}/status`, {
+        headers: { Authorization: `Bearer ${admin}` }, data: { status: 'RELEASED' }
+      });
+      expect(released.ok(), await released.text()).toBeTruthy();
+    }
+    await login(page, username, password);
+    await page.getByRole('button', { name: 'Salta', exact: true }).click();
+    await selectProject(page, project.name);
+    await page.getByText(otherIssue.title, { exact: true }).click();
+    await expect(page.getByRole('dialog').getByRole('heading', { name: otherIssue.title })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Approva$/ })).toHaveCount(0);
+    const denied = await api.patch(`/api/work/issues/${otherIssue.id}/approval`, {
+      headers: { Authorization: `Bearer ${token}` }, data: {}
+    });
+    expect(denied.status()).toBe(403);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.getByText(ownIssue.title, { exact: true }).click();
+    await page.getByRole('button', { name: /Approva$/ }).click();
+    await expect(page.getByRole('button', { name: /Approva$/ })).toHaveCount(0);
+    await expect.poll(async () => {
+      const response = await api.get(`/api/work/issues/${ownIssue.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const issue = (await response.json()).issue;
+      return { status: issue.status, approver: issue.approveUserId };
+    }).toEqual({ status: 'APPROVED', approver: user.id });
+  } finally {
+    await api.dispose();
+  }
+});
+
 async function ensureAdmin(api: APIRequestContext): Promise<string> {
   const setupStatus = await api.get('/api/setup/status');
   expect(setupStatus.ok()).toBeTruthy();

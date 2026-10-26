@@ -193,7 +193,7 @@ PATCH /api/work/issues/{id}/approval
 Authorization: Bearer <access-token>
 ```
 
-Available to `SUPERUSER` (always) or `ADMIN` (only when the issue is flagged `internal`). Approval transitions `RELEASED → APPROVED`.
+Available to `SUPERUSER`, `ADMIN` for issues flagged `internal`, or `USER` for issues they reported. Project access and issue visibility are required. Approval transitions `RELEASED → APPROVED`.
 
 The server manages two timestamps automatically:
 
