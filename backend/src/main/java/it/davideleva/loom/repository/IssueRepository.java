@@ -30,11 +30,11 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
     // Archived view: only archived, not soft-deleted (most recent archive first).
     List<Issue> findByProject_IdAndArchivedAtIsNotNullAndDeletedAtIsNullOrderByArchivedAtDescIdDesc(Long projectId);
 
-    // Scheduler: issues eligible to be archived now (RELEASED + old enough + not already archived/deleted).
+    // Scheduler: issues eligible to be archived now (APPROVED + approval old enough + not already archived/deleted).
     @Query("select issue from Issue issue "
-        + "where issue.status = it.davideleva.loom.domain.IssueStatus.RELEASED "
-        + "and issue.releasedAt is not null "
-        + "and issue.releasedAt < :before "
+        + "where issue.status = it.davideleva.loom.domain.IssueStatus.APPROVED "
+        + "and issue.approvedAt is not null "
+        + "and issue.approvedAt < :before "
         + "and issue.deletedAt is null "
         + "and issue.archivedAt is null")
     List<Issue> findArchivable(@Param("before") Instant before);
