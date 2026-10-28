@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Periodically scans every project that has {@code archiveAfterDays} configured and archives
- * any RELEASED issues whose {@code releasedAt} is older than that threshold. The check runs
+ * any APPROVED issues whose {@code approvedAt} is older than that threshold. The check runs
  * once at startup and then every {@code app.archive.check-interval} (default: 60m).
  */
 @Service
@@ -33,14 +33,15 @@ public class ArchiveScheduler {
     private final EventService eventService;
 
     @EventListener(ApplicationReadyEvent.class)
+    @Transactional
     public void onStartup() {
-        archiveReleasedIssues();
+        archiveApprovedIssues();
     }
 
     @Scheduled(fixedDelayString = "${app.archive.check-interval:60m}",
                initialDelayString = "${app.archive.check-interval:60m}")
     @Transactional
-    public void archiveReleasedIssues() {
+    public void archiveApprovedIssues() {
         Instant now = Instant.now();
         int totalArchived = 0;
         for (Project project : projects.findAutoArchiveProjects()) {
@@ -54,7 +55,7 @@ public class ArchiveScheduler {
                 if (!issue.getProject().getId().equals(project.getId())) continue;
                 issue.markArchived(now);
                 eventService.issueEvent(EventType.ISSUE_ARCHIVED, issue, null,
-                    "Archiviata automaticamente dopo " + days + " giorni dal rilascio.");
+                    "Archiviata automaticamente dopo " + days + " giorni dall'approvazione.");
                 totalArchived++;
             }
         }

@@ -45,7 +45,7 @@ class ArchiveSchedulerTest {
     void archiveDoesNothingWhenNoAutoArchiveProjects() {
         when(projects.findAutoArchiveProjects()).thenReturn(List.of());
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         verify(issues, never()).findArchivable(any());
         verify(eventService, never()).issueEvent(any(), any(), any(), any());
@@ -63,7 +63,7 @@ class ArchiveSchedulerTest {
         when(projects.findAutoArchiveProjects()).thenReturn(List.of(project));
         when(issues.findArchivable(any())).thenReturn(List.of(i1, i2, otherProject));
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         ArgumentCaptor<Issue> issueCaptor = ArgumentCaptor.forClass(Issue.class);
         verify(eventService, times(2)).issueEvent(any(), issueCaptor.capture(), any(), any());
@@ -85,7 +85,7 @@ class ArchiveSchedulerTest {
         when(projects.findAutoArchiveProjects()).thenReturn(List.of(project));
         when(issues.findArchivable(any())).thenReturn(List.of(i));
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
         verify(eventService).issueEvent(any(), any(), any(), messageCaptor.capture());
@@ -101,7 +101,7 @@ class ArchiveSchedulerTest {
 
         when(projects.findAutoArchiveProjects()).thenReturn(List.of(project));
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         verify(issues, never()).findArchivable(any());
         verify(eventService, never()).issueEvent(any(), any(), any(), any());
@@ -114,7 +114,7 @@ class ArchiveSchedulerTest {
 
         when(projects.findAutoArchiveProjects()).thenReturn(List.of(project));
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         verify(issues, never()).findArchivable(any());
     }
@@ -126,7 +126,7 @@ class ArchiveSchedulerTest {
 
         when(projects.findAutoArchiveProjects()).thenReturn(List.of(project));
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         verify(issues, never()).findArchivable(any());
     }
@@ -144,7 +144,7 @@ class ArchiveSchedulerTest {
         // each project should archive only its own issue (the other gets filtered out by the safety check).
         when(issues.findArchivable(any())).thenReturn(List.of(i1, i2));
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         verify(eventService, times(2)).issueEvent(any(), any(), any(), any());
     }
@@ -160,7 +160,7 @@ class ArchiveSchedulerTest {
         when(projects.findAutoArchiveProjects()).thenReturn(List.of(project));
         when(issues.findArchivable(any())).thenReturn(List.of(wrongProjectIssue));
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         verify(eventService, never()).issueEvent(any(), any(), any(), any());
         assertNull(wrongProjectIssue.getArchivedAt(),
@@ -178,8 +178,8 @@ class ArchiveSchedulerTest {
             .thenReturn(List.of(i))
             .thenReturn(List.of());
 
-        scheduler.archiveReleasedIssues();
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
+        scheduler.archiveApprovedIssues();
 
         // Only the first run archives.
         verify(eventService, times(1)).issueEvent(any(), any(), any(), any());
@@ -193,7 +193,7 @@ class ArchiveSchedulerTest {
         when(projects.findAutoArchiveProjects()).thenReturn(List.of(project));
         when(issues.findArchivable(any())).thenReturn(List.of());
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         verify(eventService, never()).issueEvent(any(), any(), any(), any());
     }
@@ -209,7 +209,7 @@ class ArchiveSchedulerTest {
         when(projects.findAutoArchiveProjects()).thenReturn(List.of(project));
         when(issues.findArchivable(any())).thenReturn(List.of(i1, i2, i3));
 
-        scheduler.archiveReleasedIssues();
+        scheduler.archiveApprovedIssues();
 
         verify(eventService, times(3)).issueEvent(any(), any(), any(), any());
     }
@@ -244,8 +244,8 @@ class ArchiveSchedulerTest {
     private static Issue makeIssue(Project project, long id) {
         Issue issue = new Issue(project, "Title " + id, "Desc", IssueType.ANOMALY);
         ReflectionTestUtils.setField(issue, "id", id);
-        issue.setStatus(it.davideleva.loom.domain.IssueStatus.RELEASED);
-        issue.setReleasedAt(Instant.parse("2026-01-01T00:00:00Z"));
+        issue.setStatus(it.davideleva.loom.domain.IssueStatus.APPROVED);
+        issue.setApprovedAt(Instant.parse("2026-01-01T00:00:00Z"));
         ReflectionTestUtils.setField(issue, "createdAt", Instant.parse("2026-01-01T00:00:00Z"));
         return issue;
     }
