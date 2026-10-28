@@ -224,6 +224,75 @@ describe('SegnalazioniBoardComponent', () => {
       expect(segnalazioniApi.approvaSegnalazione).not.toHaveBeenCalled();
     });
 
+    it('lets the USER author drag a released issue to APPROVED using the approval endpoint', () => {
+      userSignal.set({ id: 7, role: 'USER' } as CurrentUser);
+      const ownIssue = segnalazione({ status: 'RELEASED', issuerUserId: 7 });
+      component.segnalazioni.set([ownIssue]);
+      component.startDrag(ownIssue);
+      component.dropOnStatus('APPROVED');
+      expect(segnalazioniApi.approvaSegnalazione).toHaveBeenCalledWith(1);
+      expect(segnalazioniApi.updateStatus).not.toHaveBeenCalled();
+      expect(component.segnalazioni()[0].status).toBe('APPROVED');
+      const approved = segnalazione({ status: 'APPROVED', issuerUserId: 7,
+        approveUserId: 7, approvedAt: '2026-10-28T12:00:00Z' });
+      segnalazioniApi.approvaSegnalazione$.next(approved);
+      expect(component.segnalazioni()[0]).toEqual(approved);
+      expect(component.savingIssueId()).toBeNull();
+    });
+
+    it.each([8, null])('blocks USER approval when the issuer is %s', issuerUserId => {
+      userSignal.set({ id: 7, role: 'USER' } as CurrentUser);
+      const issue = segnalazione({ status: 'RELEASED', issuerUserId });
+      component.segnalazioni.set([issue]);
+      component.startDrag(issue);
+      component.dropOnStatus('APPROVED');
+      expect(segnalazioniApi.approvaSegnalazione).not.toHaveBeenCalled();
+      expect(segnalazioniApi.updateStatus).not.toHaveBeenCalled();
+      expect(component.segnalazioni()[0].status).toBe('RELEASED');
+      expect(component.error()).toBeTruthy();
+    });
+
+    it.each(['REPORTED', 'IN_PROGRESS', 'COMPLETED'] as const)(
+      'blocks the USER author from approving an issue in %s', status => {
+        userSignal.set({ id: 7, role: 'USER' } as CurrentUser);
+        component.startDrag(segnalazione({ status, issuerUserId: 7 }));
+        component.dropOnStatus('APPROVED');
+        expect(component.error()).toBe('Solo le segnalazioni rilasciate possono essere approvate.');
+        expect(segnalazioniApi.approvaSegnalazione).not.toHaveBeenCalled();
+      });
+
+    it('keeps other status transitions forbidden for the USER author', () => {
+      userSignal.set({ id: 7, role: 'USER' } as CurrentUser);
+      component.startDrag(segnalazione({ status: 'RELEASED', issuerUserId: 7 }));
+      component.dropOnStatus('COMPLETED');
+      expect(segnalazioniApi.updateStatus).not.toHaveBeenCalled();
+      expect(segnalazioniApi.approvaSegnalazione).not.toHaveBeenCalled();
+    });
+
+    it('restores RELEASED when approval of the USER authors issue fails', () => {
+      userSignal.set({ id: 7, role: 'USER' } as CurrentUser);
+      const issue = segnalazione({ status: 'RELEASED', issuerUserId: 7 });
+      component.segnalazioni.set([issue]);
+      component.startDrag(issue);
+      component.dropOnStatus('APPROVED');
+      segnalazioniApi.approvaSegnalazione$.error(new Error('Forbidden'));
+      expect(component.segnalazioni()[0].status).toBe('RELEASED');
+      expect(component.savingIssueId()).toBeNull();
+      expect(component.error()).toBe('Non riesco a salvare il cambio stato.');
+    });
+
+    it.each([
+      { role: 'ADMIN', internal: true, allowed: true },
+      { role: 'ADMIN', internal: false, allowed: false },
+      { role: 'TEAM', internal: true, allowed: false }
+    ] as const)('preserves approval permissions for $role with internal=$internal', ({ role, internal, allowed }) => {
+      userSignal.set({ id: 7, role } as CurrentUser);
+      component.startDrag(segnalazione({ status: 'RELEASED', issuerUserId: 7, internal }));
+      component.dropOnStatus('APPROVED');
+      expect(segnalazioniApi.approvaSegnalazione).toHaveBeenCalledTimes(allowed ? 1 : 0);
+      expect(segnalazioniApi.updateStatus).not.toHaveBeenCalled();
+    });
+
     it('approves via approvaSegnalazione when SUPERUSER moves RELEASED → APPROVED', () => {
       userSignal.set({ ...userSignal(), id: 7, role: 'SUPERUSER' } as CurrentUser);
       component.segnalazioni.set([segnalazione({ id: 1, status: 'RELEASED' })]);
