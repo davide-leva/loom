@@ -383,11 +383,13 @@ export class SegnalazioniBoardComponent {
     this.draggedSegnalazione = null;
     if (!segnalazione || segnalazione.status === status || this.savingIssueId() !== null) return;
     if (status === 'APPROVED' && segnalazione.status !== 'APPROVED') {
-      const role = this.auth.user()?.role;
+      const user = this.auth.user();
+      const role = user?.role;
       const isSuperuser = role === 'SUPERUSER';
       const isAdminOnInternal = role === 'ADMIN' && segnalazione.internal;
-      if (!isSuperuser && !isAdminOnInternal) {
-        this.error.set('Solo un SUPERUSER (o un ADMIN per segnalazioni interne) può spostare in Approvato.');
+      const isUserOnOwnIssue = role === 'USER' && segnalazione.issuerUserId === user?.id;
+      if (!isSuperuser && !isAdminOnInternal && !isUserOnOwnIssue) {
+        this.error.set('Solo l’autore USER, un SUPERUSER o un ADMIN per segnalazioni interne può spostare in Approvato.');
         return;
       }
       if (segnalazione.status !== 'RELEASED') {
